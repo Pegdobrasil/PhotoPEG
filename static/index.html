@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PhotoPEG Editor</title>
+
+  <link rel="icon" href="/static/favicon-32x32.png?v=4" sizes="32x32" type="image/png">
+  <link rel="shortcut icon" href="/static/favicon-32x32.png?v=4" type="image/png">
+  <link rel="apple-touch-icon" href="/static/favicon-32x32.png?v=4">
+
+  <style>
+    * { box-sizing: border-box; }
+    :root {
+      --bg-main: #050b18;
+      --line: rgba(114, 156, 255, 0.18);
+      --text: #ffffff;
+      --muted: #b8c7e6;
+      --blue-1: #2d6dff;
+      --blue-2: #4f8dff;
+      --blue-3: #6eb7ff;
+      --green: #17b26a;
+      --shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+      --radius-xl: 24px;
+      --transition: 0.28s ease;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(55, 118, 255, 0.18), transparent 28%),
+        radial-gradient(circle at top right, rgba(71, 173, 255, 0.14), transparent 22%),
+        linear-gradient(180deg, #030814 0%, #07101f 40%, #050b18 100%);
+      min-height: 100vh;
+    }
+
+    .wrap { max-width: 1440px; margin: 0 auto; padding: 28px 20px 40px; }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 24px;
+      padding: 16px 20px;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: linear-gradient(135deg, rgba(13, 23, 47, 0.88), rgba(8, 17, 35, 0.88));
+      box-shadow: var(--shadow);
+    }
+
+    .brand { display: flex; align-items: center; gap: 16px; }
+    .brand-logo { width: 180px; max-width: 100%; height: auto; display: block; }
+    .brand-title { font-size: 28px; font-weight: 800; margin: 0; }
+    .brand-subtitle { margin: 4px 0 0; color: var(--muted); font-size: 14px; line-height: 1.45; }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-xl);
+      background: linear-gradient(180deg, rgba(11, 21, 43, 0.96), rgba(7, 14, 29, 0.96));
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .panel-header { padding: 26px 26px 8px; }
+    .panel-header h1 { margin: 0 0 8px; font-size: 34px; font-weight: 800; }
+    .panel-header p { margin: 0; color: var(--muted); font-size: 16px; line-height: 1.5; max-width: 960px; }
+    .panel-body { padding: 22px 26px 28px; }
+
+    .upload-box {
+      border: 2px dashed rgba(82, 134, 255, 0.55);
+      border-radius: 22px;
+      padding: 28px 20px;
+      text-align: center;
+      background:
+        linear-gradient(135deg, rgba(34, 68, 160, 0.16), rgba(28, 105, 255, 0.08)),
+        rgba(12, 20, 40, 0.65);
+      transition: var(--transition);
+    }
+
+    .upload-title { font-size: 22px; font-weight: 800; margin-bottom: 10px; }
+    .upload-description { color: var(--muted); font-size: 14px; margin-bottom: 18px; }
+
+    .file-input {
+      width: 100%;
+      max-width: 760px;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(3, 10, 22, 0.9);
+      color: #fff;
+      padding: 14px;
+      outline: none;
+    }
+
+    .controls-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 16px;
+      margin-top: 22px;
+    }
+
+    .field { display: flex; flex-direction: column; gap: 8px; }
+    .field label { font-size: 14px; color: #dfe9ff; font-weight: 600; }
+
+    .slider-wrap {
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: linear-gradient(180deg, rgba(5, 13, 28, 0.95), rgba(8, 17, 34, 0.95));
+      padding: 12px 14px;
+    }
+
+    .slider-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .slider-value {
+      min-width: 54px;
+      text-align: right;
+      font-size: 13px;
+      font-weight: 700;
+      color: #dce8ff;
+    }
+
+    input[type="range"] { width: 100%; appearance: none; background: transparent; cursor: pointer; }
+    input[type="range"]::-webkit-slider-runnable-track {
+      height: 6px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, rgba(45,109,255,0.9), rgba(110,183,255,0.95));
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #ffffff;
+      border: 3px solid #4f8dff;
+      margin-top: -6px;
+      box-shadow: 0 0 0 4px rgba(79,141,255,0.15);
+    }
+
+    .toolbar { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 22px; align-items: center; }
+
+    .btn {
+      border: 0;
+      border-radius: 14px;
+      padding: 14px 20px;
+      font-size: 15px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: var(--transition);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-height: 48px;
+      text-decoration: none;
+    }
+
+    .btn-primary { color: #fff; background: linear-gradient(135deg, var(--blue-1), var(--blue-2), var(--blue-3)); }
+    .btn-secondary { color: #d8e8ff; background: linear-gradient(180deg, rgba(14, 26, 52, 0.95), rgba(10, 20, 39, 0.95)); border: 1px solid rgba(110, 183, 255, 0.18); }
+    .btn-success { color: #fff; background: linear-gradient(135deg, #109d62, #17b26a); }
+    .btn:hover { transform: translateY(-2px); }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+    .status-box {
+      margin-top: 18px;
+      padding: 16px 18px;
+      border-radius: 16px;
+      border: 1px solid rgba(114, 156, 255, 0.12);
+      background: linear-gradient(180deg, rgba(5, 13, 28, 0.95), rgba(8, 17, 34, 0.95));
+      color: #dbe7ff;
+      white-space: pre-line;
+      min-height: 56px;
+    }
+
+    .section-title { margin: 34px 0 16px; font-size: 22px; font-weight: 800; }
+
+    .preview-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      gap: 18px;
+    }
+
+    .preview-card {
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background: linear-gradient(180deg, rgba(15, 26, 52, 0.96), rgba(8, 17, 34, 0.96));
+      overflow: hidden;
+      transition: var(--transition);
+      box-shadow: 0 12px 26px rgba(0, 0, 0, 0.2);
+    }
+
+    .preview-top {
+      padding: 16px 18px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .preview-name { font-size: 15px; font-weight: 700; color: #ffffff; word-break: break-word; }
+    .preview-badge {
+      font-size: 12px;
+      font-weight: 700;
+      color: #dce9ff;
+      padding: 8px 10px;
+      border-radius: 999px;
+      background: linear-gradient(135deg, rgba(47, 107, 255, 0.18), rgba(110, 183, 255, 0.12));
+      border: 1px solid rgba(114, 156, 255, 0.18);
+      white-space: nowrap;
+    }
+
+    .compare-wrap {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      padding: 18px;
+    }
+
+    .image-box {
+      background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.015)), #0b1428;
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 16px;
+      padding: 14px;
+    }
+
+    .image-label { font-size: 13px; font-weight: 700; color: #d8e8ff; margin-bottom: 10px; }
+
+    .image-stage {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      background: linear-gradient(45deg, #f2f5fb 25%, #ffffff 25%, #ffffff 50%, #f2f5fb 50%, #f2f5fb 75%, #ffffff 75%, #ffffff 100%);
+      background-size: 22px 22px;
+      border-radius: 12px;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .image-stage img { width: 100%; height: 100%; object-fit: contain; display: block; }
+
+    .preview-controls {
+      padding: 0 18px 18px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .control-mini { display: flex; flex-direction: column; gap: 6px; }
+    .control-mini label { font-size: 12px; color: var(--muted); font-weight: 700; }
+    .preview-actions { padding: 0 18px 18px; display: flex; flex-wrap: wrap; gap: 10px; }
+
+    .empty-state {
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background: linear-gradient(180deg, rgba(11, 21, 43, 0.7), rgba(8, 15, 30, 0.7));
+      padding: 26px;
+      text-align: center;
+      color: var(--muted);
+    }
+
+    .modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(3, 8, 18, 0.82);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      padding: 18px;
+    }
+    .modal.active { display: flex; }
+
+    .modal-card {
+      width: min(1400px, 100%);
+      max-height: 95vh;
+      overflow: auto;
+      border-radius: 24px;
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(10, 19, 38, 0.98), rgba(6, 13, 27, 0.98));
+      box-shadow: 0 30px 90px rgba(0, 0, 0, 0.5);
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 18px 22px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      position: sticky;
+      top: 0;
+      background: rgba(10, 19, 38, 0.95);
+      z-index: 2;
+    }
+
+    .modal-title { font-size: 20px; font-weight: 800; margin: 0; }
+
+    .modal-body {
+      padding: 18px 22px 22px;
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 18px;
+    }
+
+    .editor-stage {
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 18px;
+      background: #091224;
+      padding: 14px;
+    }
+
+    .editor-canvas-wrap {
+      width: 100%;
+      height: 72vh;
+      min-height: 540px;
+      border-radius: 14px;
+      overflow: hidden;
+      background: linear-gradient(45deg, #f2f5fb 25%, #ffffff 25%, #ffffff 50%, #f2f5fb 50%, #f2f5fb 75%, #ffffff 75%, #ffffff 100%);
+      background-size: 24px 24px;
+      position: relative;
+    }
+
+    #editorCanvas { width: 100%; height: 100%; display: block; cursor: crosshair; }
+
+    .editor-side { display: flex; flex-direction: column; gap: 16px; }
+
+    .editor-panel {
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 18px;
+      background: linear-gradient(180deg, rgba(13, 24, 47, 0.95), rgba(8, 18, 36, 0.95));
+      padding: 16px;
+    }
+
+    .editor-panel h3 { margin: 0 0 14px; font-size: 16px; }
+    .editor-toolbar { display: flex; flex-wrap: wrap; gap: 10px; }
+
+    .tool-btn {
+      padding: 12px 14px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(5, 13, 28, 0.9);
+      color: #fff;
+      cursor: pointer;
+      font-weight: 700;
+    }
+
+    .tool-btn.active {
+      border-color: rgba(110, 183, 255, 0.55);
+      box-shadow: 0 0 0 4px rgba(55, 118, 255, 0.08);
+    }
+
+    .editor-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .preview-final {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      border-radius: 14px;
+      overflow: hidden;
+      background: linear-gradient(45deg, #f2f5fb 25%, #ffffff 25%, #ffffff 50%, #f2f5fb 50%, #f2f5fb 75%, #ffffff 75%, #ffffff 100%);
+      background-size: 24px 24px;
+      border: 1px solid rgba(255,255,255,0.08);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .preview-final img { width: 100%; height: 100%; object-fit: contain; display: block; }
+
+    .loading-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 11000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: rgba(2, 8, 18, 0.82);
+      backdrop-filter: blur(12px);
+    }
+
+    .loading-overlay.active { display: flex; }
+
+    .loading-card {
+      width: min(640px, 100%);
+      border-radius: 24px;
+      border: 1px solid rgba(110, 183, 255, 0.18);
+      background: linear-gradient(180deg, rgba(11, 21, 43, 0.98), rgba(6, 13, 27, 0.98));
+      box-shadow: 0 30px 90px rgba(0, 0, 0, 0.5);
+      padding: 24px;
+    }
+
+    .loading-title { margin: 0 0 6px; font-size: 24px; font-weight: 800; }
+    .loading-subtitle { margin: 0 0 18px; color: var(--muted); line-height: 1.5; font-size: 14px; }
+
+    .loading-progress-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+      font-size: 14px;
+      font-weight: 700;
+      color: #e6efff;
+    }
+
+    .loading-bar {
+      width: 100%;
+      height: 12px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.08);
+      overflow: hidden;
+      margin-bottom: 18px;
+    }
+
+    .loading-bar-fill {
+      width: 0%;
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #2d6dff, #4f8dff, #6eb7ff);
+      transition: width 0.25s ease;
+    }
+
+    .loading-steps { display: grid; gap: 10px; }
+
+    .loading-step {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.06);
+      background: rgba(255,255,255,0.02);
+    }
+
+    .loading-step-left { display: flex; align-items: center; gap: 12px; }
+
+    .loading-step-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.14);
+      flex: 0 0 12px;
+    }
+
+    .loading-step.active .loading-step-dot { background: #4f8dff; }
+    .loading-step.done .loading-step-dot { background: #17b26a; }
+
+    .loading-step-status {
+      font-size: 12px;
+      color: #b8c7e6;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    @media (max-width: 1160px) {
+      .controls-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .modal-body { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 840px) {
+      .topbar { flex-direction: column; align-items: flex-start; }
+      .compare-wrap, .preview-controls { grid-template-columns: 1fr; }
+      .controls-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 640px) {
+      .wrap { padding: 18px 14px 28px; }
+      .panel-header, .panel-body { padding-left: 16px; padding-right: 16px; }
+      .controls-grid { grid-template-columns: 1fr; }
+      .toolbar { flex-direction: column; align-items: stretch; }
+      .btn { width: 100%; }
+      .editor-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <div class="brand">
+        <img class="brand-logo" src="https://raw.githubusercontent.com/Pegdobrasil/peg-imagens-site/refs/heads/main/logo%20png%20branca.png" alt="PEG do Brasil" />
+        <div>
+          <h2 class="brand-title">Painel de Edição em Lote</h2>
+          <p class="brand-subtitle">Revisão visual, correção manual do recorte e exportação otimizada para catálogo.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <h1>PhotoPEG Editor</h1>
+        <p>Envie suas imagens, visualize o comparativo entre a foto original e a editada, corrija resíduos de fundo com o editor manual e faça o download individual ou do lote completo.</p>
+      </div>
+
+      <div class="panel-body">
+        <form id="uploadForm">
+          <div class="upload-box">
+            <div class="upload-title">Envie suas fotos em lote</div>
+            <div class="upload-description">Formatos aceitos: JPG, JPEG, PNG e WEBP. Nesta versão, envie até 10 imagens por vez.</div>
+            <input id="files" class="file-input" type="file" name="files" accept=".jpg,.jpeg,.png,.webp" multiple required />
+          </div>
+
+          <div class="controls-grid">
+            <div class="field">
+              <label for="margin_percent">Margem (%)</label>
+              <div class="slider-wrap">
+                <div class="slider-head"><span>Ajuste da margem</span><span class="slider-value" id="margin_percent_value">8%</span></div>
+                <input id="margin_percent" type="range" min="0" max="30" step="1" value="8" data-suffix="%" data-output="margin_percent_value" />
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="jpeg_quality">Qualidade JPG</label>
+              <div class="slider-wrap">
+                <div class="slider-head"><span>Qualidade</span><span class="slider-value" id="jpeg_quality_value">95</span></div>
+                <input id="jpeg_quality" type="range" min="70" max="100" step="1" value="95" data-output="jpeg_quality_value" />
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="zoom_percent">Zoom inicial (%)</label>
+              <div class="slider-wrap">
+                <div class="slider-head"><span>Zoom inicial</span><span class="slider-value" id="zoom_percent_value">100%</span></div>
+                <input id="zoom_percent" type="range" min="50" max="250" step="1" value="100" data-suffix="%" data-output="zoom_percent_value" />
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="offset_x">Posição X</label>
+              <div class="slider-wrap">
+                <div class="slider-head"><span>Deslocamento horizontal</span><span class="slider-value" id="offset_x_value">0</span></div>
+                <input id="offset_x" type="range" min="-500" max="500" step="1" value="0" data-output="offset_x_value" />
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="offset_y">Posição Y</label>
+              <div class="slider-wrap">
+                <div class="slider-head"><span>Deslocamento vertical</span><span class="slider-value" id="offset_y_value">0</span></div>
+                <input id="offset_y" type="range" min="-500" max="500" step="1" value="0" data-output="offset_y_value" />
+              </div>
+            </div>
+          </div>
+
+          <div class="toolbar">
+            <button id="submitBtn" class="btn btn-primary" type="submit">Processar lote</button>
+            <button id="zipBtn" class="btn btn-secondary" type="button">Baixar tudo em ZIP</button>
+            <button id="clearBtn" class="btn btn-secondary" type="button">Limpar painel</button>
+          </div>
+        </form>
+
+        <div class="status-box" id="status">Aguardando envio das imagens.</div>
+
+        <h2 class="section-title">Comparativo das imagens</h2>
+        <div id="emptyState" class="empty-state">O comparativo aparecerá aqui após o processamento do lote.</div>
+        <div id="previewGrid" class="preview-grid" style="display:none;"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="editorModal" class="modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 class="modal-title" id="modalTitle">Correção manual do recorte</h2>
+        <button id="closeEditorBtn" class="btn btn-secondary" type="button">Fechar</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="editor-stage">
+          <div class="editor-canvas-wrap">
+            <canvas id="editorCanvas"></canvas>
+          </div>
+        </div>
+
+        <div class="editor-side">
+          <div class="editor-panel">
+            <h3>Ferramentas</h3>
+            <div class="editor-toolbar">
+              <button class="tool-btn active" data-tool="erase" type="button">Apagar fundo</button>
+              <button class="tool-btn" data-tool="restore" type="button">Restaurar produto</button>
+              <button class="tool-btn" data-tool="pan" type="button">Mover área</button>
+              <button id="undoBtn" class="tool-btn" type="button">Desfazer</button>
+              <button id="redoBtn" class="tool-btn" type="button">Refazer</button>
+              <button id="fitBtn" class="tool-btn" type="button">Centralizar visão</button>
+            </div>
+          </div>
+
+          <div class="editor-panel">
+            <h3>Ajustes</h3>
+            <div class="editor-grid">
+              <div class="field">
+                <label for="brushSize">Tamanho do pincel</label>
+                <div class="slider-wrap">
+                  <div class="slider-head"><span>Pincel</span><span class="slider-value" id="brushSize_value">28</span></div>
+                  <input id="brushSize" type="range" min="5" max="200" step="1" value="28" data-output="brushSize_value" />
+                </div>
+              </div>
+
+              <div class="field">
+                <label for="editorZoomView">Zoom da área (%)</label>
+                <div class="slider-wrap">
+                  <div class="slider-head"><span>Zoom da área</span><span class="slider-value" id="editorZoomView_value">100%</span></div>
+                  <input id="editorZoomView" type="range" min="20" max="600" step="1" value="100" data-suffix="%" data-output="editorZoomView_value" />
+                </div>
+              </div>
+
+              <div class="field">
+                <label for="editorMargin">Margem final (%)</label>
+                <div class="slider-wrap">
+                  <div class="slider-head"><span>Margem</span><span class="slider-value" id="editorMargin_value">8%</span></div>
+                  <input id="editorMargin" type="range" min="0" max="30" step="1" value="8" data-suffix="%" data-output="editorMargin_value" />
+                </div>
+              </div>
+
+              <div class="field">
+                <label for="editorFinalZoom">Zoom final (%)</label>
+                <div class="slider-wrap">
+                  <div class="slider-head"><span>Zoom final</span><span class="slider-value" id="editorFinalZoom_value">100%</span></div>
+                  <input id="editorFinalZoom" type="range" min="50" max="250" step="1" value="100" data-suffix="%" data-output="editorFinalZoom_value" />
+                </div>
+              </div>
+
+              <div class="field">
+                <label for="editorOffsetX">Posição X</label>
+                <div class="slider-wrap">
+                  <div class="slider-head"><span>Posição X</span><span class="slider-value" id="editorOffsetX_value">0</span></div>
+                  <input id="editorOffsetX" type="range" min="-500" max="500" step="1" value="0" data-output="editorOffsetX_value" />
+                </div>
+              </div>
+
+              <div class="field">
+                <label for="editorOffsetY">Posição Y</label>
+                <div class="slider-wrap">
+                  <div class="slider-head"><span>Posição Y</span><span class="slider-value" id="editorOffsetY_value">0</span></div>
+                  <input id="editorOffsetY" type="range" min="-500" max="500" step="1" value="0" data-output="editorOffsetY_value" />
+                </div>
+              </div>
+
+              <div class="field">
+                <label for="editorJpegQuality">Qualidade JPG</label>
+                <div class="slider-wrap">
+                  <div class="slider-head"><span>Qualidade</span><span class="slider-value" id="editorJpegQuality_value">95</span></div>
+                  <input id="editorJpegQuality" type="range" min="70" max="100" step="1" value="95" data-output="editorJpegQuality_value" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="editor-panel">
+            <h3>Prévia final</h3>
+            <div class="preview-final">
+              <img id="editorPreviewFinal" src="" alt="Prévia final">
+            </div>
+          </div>
+
+          <div class="editor-panel">
+            <div class="toolbar">
+              <button id="saveMaskBtn" class="btn btn-primary" type="button">Salvar correção</button>
+              <button id="downloadCurrentBtn" class="btn btn-success" type="button">Baixar JPG</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="loadingOverlay" class="loading-overlay">
+    <div class="loading-card">
+      <h2 class="loading-title">Processando imagens</h2>
+      <p class="loading-subtitle" id="loadingSubtitle">Aguarde enquanto o sistema envia, recorta, padroniza e prepara o painel comparativo.</p>
+
+      <div class="loading-progress-top">
+        <span id="loadingCurrentStep">Preparando lote...</span>
+        <span id="loadingPercent">0%</span>
+      </div>
+
+      <div class="loading-bar">
+        <div id="loadingBarFill" class="loading-bar-fill"></div>
+      </div>
+
+      <div class="loading-steps">
+        <div class="loading-step" data-step="1">
+          <div class="loading-step-left"><span class="loading-step-dot"></span><span>Separando arquivos do lote</span></div>
+          <span class="loading-step-status">aguardando</span>
+        </div>
+        <div class="loading-step" data-step="2">
+          <div class="loading-step-left"><span class="loading-step-dot"></span><span>Enviando imagens ao servidor</span></div>
+          <span class="loading-step-status">aguardando</span>
+        </div>
+        <div class="loading-step" data-step="3">
+          <div class="loading-step-left"><span class="loading-step-dot"></span><span>Removendo fundo e gerando máscara</span></div>
+          <span class="loading-step-status">aguardando</span>
+        </div>
+        <div class="loading-step" data-step="4">
+          <div class="loading-step-left"><span class="loading-step-dot"></span><span>Montando prévias e comparativo</span></div>
+          <span class="loading-step-status">aguardando</span>
+        </div>
+        <div class="loading-step" data-step="5">
+          <div class="loading-step-left"><span class="loading-step-dot"></span><span>Finalizando painel de revisão</span></div>
+          <span class="loading-step-status">aguardando</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js?v=4"></script>
+</body>
+</html>
