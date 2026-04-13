@@ -177,7 +177,7 @@ function startLoadingSimulation(fileCount) {
     { progress: 24, step: 2, label: "Enviando imagens ao servidor..." },
     { progress: 58, step: 3, label: `Removendo fundo e gerando máscara em ${fileCount} imagem(ns)...` },
     { progress: 82, step: 4, label: "Montando grade e previews..." },
-    { progress: 96, step: 5, label: "Finalizando painel de revisão..." },
+    { progress: 96, step: 5, label: "Finalizando dashboard..." },
   ];
 
   let stageIndex = 0;
@@ -205,7 +205,7 @@ function finishLoadingSuccess() {
     loadingSimulationTimer = null;
   }
 
-  setLoadingProgress(100, "Painel pronto para revisão.");
+  setLoadingProgress(100, "Dashboard pronto para revisão.");
   loadingSteps.forEach((step) => {
     step.classList.remove("active");
     step.classList.add("done");
@@ -279,6 +279,13 @@ function resetWorkspace() {
   activePreviewMini.src = "";
 }
 
+function getCurrentDisplayUrl(item) {
+  if (!item) return "";
+  if (currentViewMode === "original") return cacheBust(item.original_url);
+  if (currentViewMode === "mask") return cacheBust(item.mask_url);
+  return cacheBust(item.preview_url);
+}
+
 function createThumbCard(item) {
   const card = document.createElement("div");
   card.className = "thumb-card";
@@ -289,14 +296,18 @@ function createThumbCard(item) {
       <div class="thumb-name">${item.filename}</div>
       <input class="thumb-check" type="checkbox" ${selectedImageIds.has(item.image_id) ? "checked" : ""}>
     </div>
-    <div class="thumb-image">
+    <div class="thumb-preview">
       <img src="${cacheBust(item.preview_url)}" alt="Miniatura">
     </div>
     <div class="thumb-meta">
-      <span>${item.params.margin_percent}%</span>
-      <span>${item.params.zoom_percent}%</span>
+      <span>Margem ${item.params.margin_percent}%</span>
+      <span>Zoom ${item.params.zoom_percent}%</span>
     </div>
   `;
+
+  if (item.image_id === activeImageId) {
+    card.classList.add("active");
+  }
 
   card.addEventListener("click", (event) => {
     if (event.target.classList.contains("thumb-check")) return;
@@ -310,29 +321,17 @@ function createThumbCard(item) {
     } else {
       selectedImageIds.delete(item.image_id);
     }
-    renderThumbs();
+    renderWorkspace();
   });
-
-  if (item.image_id === activeImageId) {
-    card.classList.add("active");
-  }
 
   return card;
 }
 
 function renderThumbs() {
   thumbGrid.innerHTML = "";
-  const items = Object.values(itemsState);
-  items.forEach((item) => {
+  Object.values(itemsState).forEach((item) => {
     thumbGrid.appendChild(createThumbCard(item));
   });
-}
-
-function getCurrentDisplayUrl(item) {
-  if (!item) return "";
-  if (currentViewMode === "original") return cacheBust(item.original_url);
-  if (currentViewMode === "mask") return cacheBust(item.mask_url);
-  return cacheBust(item.preview_url);
 }
 
 function renderViewer() {
@@ -352,18 +351,16 @@ function renderViewer() {
   activeYInput.value = item.params.offset_y ?? 0;
   activeQualityInput.value = item.params.jpeg_quality ?? 95;
 
-  [
-    activeMarginInput,
-    activeZoomInput,
-    activeXInput,
-    activeYInput,
-    activeQualityInput,
-  ].forEach(updateSliderValue);
+  [activeMarginInput, activeZoomInput, activeXInput, activeYInput, activeQualityInput].forEach(updateSliderValue);
+
+  viewModeButtons.forEach((btn) => {
+    btn.classList.toggle("btn-primary", btn.dataset.view === currentViewMode);
+    btn.classList.toggle("btn-secondary", btn.dataset.view !== currentViewMode);
+  });
 }
 
 function renderWorkspace() {
-  const items = Object.values(itemsState);
-  if (!items.length) {
+  if (!Object.keys(itemsState).length) {
     workspace.classList.remove("active");
     return;
   }
@@ -371,11 +368,6 @@ function renderWorkspace() {
   workspace.classList.add("active");
   renderThumbs();
   renderViewer();
-
-  viewModeButtons.forEach((btn) => {
-    btn.classList.toggle("btn-primary", btn.dataset.view === currentViewMode);
-    btn.classList.toggle("btn-secondary", btn.dataset.view !== currentViewMode);
-  });
 }
 
 function setActiveImage(imageId) {
@@ -403,8 +395,8 @@ async function processBatch(event) {
     return;
   }
 
-  if (filesInput.files.length > 10) {
-    setStatus("Envie no máximo 10 imagens por vez.");
+  if (filesInput.files.length > 50) {
+    setStatus("Envie no máximo 50 imagens por vez.");
     return;
   }
 
@@ -441,7 +433,7 @@ async function processBatch(event) {
     renderWorkspace();
     finishLoadingSuccess();
 
-    setStatus(`Concluído.\nImagens processadas: ${data.items.length}\nClique na miniatura para abrir a imagem e revisar.`);
+    setStatus(`Concluído.\nImagens processadas: ${data.items.length}\nClique na galeria para revisar as imagens.`);
   } catch (error) {
     finishLoadingError(error.message);
     setStatus(error.message || "Falha ao processar o lote.");
@@ -474,9 +466,7 @@ async function saveActiveImage({ centralize = false } = {}) {
     });
 
     const data = await response.json();
-    if (!response.ok) {
-      throw new Error(data.error || "Falha ao atualizar a imagem.");
-    }
+    if (!response.ok) throw new Error(data.error || "Falha ao atualizar a imagem.");
 
     updateItemState(data.item);
     setStatus(`Imagem atualizada: ${data.item.filename}`);
@@ -515,9 +505,7 @@ async function applyToSelected({ centralize = false } = {}) {
     });
 
     const data = await response.json();
-    if (!response.ok) {
-      throw new Error(data.error || "Falha ao aplicar ajustes.");
-    }
+    if (!response.ok) throw new Error(data.error || "Falha ao aplicar ajustes.");
 
     data.items.forEach((item) => {
       itemsState[item.image_id] = item;
@@ -617,10 +605,7 @@ async function saveEditorChanges() {
     });
 
     const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.error || "Falha ao salvar a correção.");
-    }
+    if (!response.ok) throw new Error(data.error || "Falha ao salvar a correção.");
 
     itemsState[item.image_id] = data.item;
     activeImageId = data.item.image_id;
@@ -755,9 +740,7 @@ function saveHistorySnapshot() {
   const snapshot = editor.maskCtx.getImageData(0, 0, editor.maskCanvas.width, editor.maskCanvas.height);
   editor.history = editor.history.slice(0, editor.historyIndex + 1);
   editor.history.push(snapshot);
-  if (editor.history.length > 20) {
-    editor.history.shift();
-  }
+  if (editor.history.length > 20) editor.history.shift();
   editor.historyIndex = editor.history.length - 1;
 }
 
@@ -828,7 +811,7 @@ function drawBrushPreview() {
   ctx.save();
   ctx.beginPath();
   ctx.arc(editor.lastPoint.canvasX, editor.lastPoint.canvasY, Math.max(4, drawRadius), 0, Math.PI * 2);
-  ctx.strokeStyle = editor.tool === "erase" ? "#ff5f7a" : "#17b26a";
+  ctx.strokeStyle = editor.tool === "erase" ? "#ff5f7a" : "#18b36c";
   ctx.lineWidth = 2;
   ctx.stroke();
   ctx.restore();
@@ -974,26 +957,6 @@ async function loadMaskIntoCanvas(maskUrl, width, height) {
   editor.maskCtx.drawImage(img, 0, 0, width, height);
 }
 
-function renderViewer() {
-  const item = itemsState[activeImageId];
-  if (!item) {
-    viewerStage.innerHTML = `<div class="viewer-empty">Nenhuma imagem selecionada.</div>`;
-    activePreviewMini.src = "";
-    return;
-  }
-
-  viewerStage.innerHTML = `<img src="${getCurrentDisplayUrl(item)}" alt="Imagem ativa">`;
-  activePreviewMini.src = cacheBust(item.preview_url);
-
-  activeMarginInput.value = item.params.margin_percent ?? 8;
-  activeZoomInput.value = item.params.zoom_percent ?? 100;
-  activeXInput.value = item.params.offset_x ?? 0;
-  activeYInput.value = item.params.offset_y ?? 0;
-  activeQualityInput.value = item.params.jpeg_quality ?? 95;
-
-  [activeMarginInput, activeZoomInput, activeXInput, activeYInput, activeQualityInput].forEach(updateSliderValue);
-}
-
 function bindEvents() {
   form.addEventListener("submit", processBatch);
 
@@ -1017,8 +980,7 @@ function bindEvents() {
   });
 
   clearSelectionBtn.addEventListener("click", () => {
-    selectedImageIds = new Set();
-    if (activeImageId) selectedImageIds.add(activeImageId);
+    selectedImageIds = activeImageId ? new Set([activeImageId]) : new Set();
     renderWorkspace();
   });
 
