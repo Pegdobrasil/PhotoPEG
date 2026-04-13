@@ -4,14 +4,35 @@ const statusBox = document.getElementById("status");
 const submitBtn = document.getElementById("submitBtn");
 const zipBtn = document.getElementById("zipBtn");
 const clearBtn = document.getElementById("clearBtn");
-const previewGrid = document.getElementById("previewGrid");
-const emptyState = document.getElementById("emptyState");
 
 const marginInput = document.getElementById("margin_percent");
 const jpegQualityInput = document.getElementById("jpeg_quality");
 const zoomPercentInput = document.getElementById("zoom_percent");
 const offsetXInput = document.getElementById("offset_x");
 const offsetYInput = document.getElementById("offset_y");
+
+const workspace = document.getElementById("workspace");
+const thumbGrid = document.getElementById("thumbGrid");
+const viewerStage = document.getElementById("viewerStage");
+const activePreviewMini = document.getElementById("activePreviewMini");
+
+const selectAllBtn = document.getElementById("selectAllBtn");
+const clearSelectionBtn = document.getElementById("clearSelectionBtn");
+const applySelectedBtn = document.getElementById("applySelectedBtn");
+const centerSelectedBtn = document.getElementById("centerSelectedBtn");
+
+const saveActiveBtn = document.getElementById("saveActiveBtn");
+const centerActiveBtn = document.getElementById("centerActiveBtn");
+const openMaskEditorBtn = document.getElementById("openMaskEditorBtn");
+const downloadActiveBtn = document.getElementById("downloadActiveBtn");
+
+const activeMarginInput = document.getElementById("active_margin");
+const activeZoomInput = document.getElementById("active_zoom");
+const activeXInput = document.getElementById("active_x");
+const activeYInput = document.getElementById("active_y");
+const activeQualityInput = document.getElementById("active_quality");
+
+const viewModeButtons = Array.from(document.querySelectorAll(".view-mode-btn"));
 
 const editorModal = document.getElementById("editorModal");
 const closeEditorBtn = document.getElementById("closeEditorBtn");
@@ -42,7 +63,11 @@ const loadingBarFill = document.getElementById("loadingBarFill");
 const loadingSteps = Array.from(document.querySelectorAll(".loading-step"));
 
 let batchZipUrl = "#";
+let currentBatchId = null;
 let itemsState = {};
+let activeImageId = null;
+let selectedImageIds = new Set();
+let currentViewMode = "edited";
 let loadingSimulationTimer = null;
 let currentProgress = 0;
 
@@ -77,15 +102,6 @@ function setStatus(message) {
   statusBox.textContent = message;
 }
 
-function resetPanel() {
-  itemsState = {};
-  batchZipUrl = "#";
-  previewGrid.innerHTML = "";
-  previewGrid.style.display = "none";
-  emptyState.style.display = "block";
-  setStatus("Aguardando envio das imagens.");
-}
-
 function updateSliderValue(input) {
   const outputId = input.dataset.output;
   if (!outputId) return;
@@ -101,118 +117,6 @@ function initSliders() {
     updateSliderValue(slider);
     slider.addEventListener("input", () => updateSliderValue(slider));
   });
-}
-
-function createSliderControl(label, className, value, min, max, step = 1, suffix = "") {
-  const outputId = `${className}_${Math.random().toString(36).slice(2, 8)}`;
-  return `
-    <div class="control-mini">
-      <label>${label}</label>
-      <div class="slider-wrap">
-        <div class="slider-head">
-          <span>Ajuste</span>
-          <span class="slider-value" id="${outputId}">${value}${suffix}</span>
-        </div>
-        <input
-          class="${className}"
-          type="range"
-          min="${min}"
-          max="${max}"
-          step="${step}"
-          value="${value}"
-          data-output="${outputId}"
-          data-suffix="${suffix}"
-        >
-      </div>
-    </div>
-  `;
-}
-
-function createCard(item) {
-  const card = document.createElement("div");
-  card.className = "preview-card";
-  card.dataset.imageId = item.image_id;
-
-  const params = item.params || {};
-
-  card.innerHTML = `
-    <div class="preview-top">
-      <div class="preview-name">${item.filename}</div>
-      <div class="preview-badge">Recorte processado</div>
-    </div>
-
-    <div class="compare-wrap">
-      <div class="image-box">
-        <div class="image-label">Original</div>
-        <div class="image-stage">
-          <img src="${cacheBust(item.original_url)}" alt="Imagem original">
-        </div>
-      </div>
-
-      <div class="image-box">
-        <div class="image-label">Editada</div>
-        <div class="image-stage">
-          <img src="${cacheBust(item.preview_url)}" alt="Imagem editada">
-        </div>
-      </div>
-    </div>
-
-    <div class="preview-controls">
-      ${createSliderControl("Margem (%)", "card-margin", params.margin_percent ?? 8, 0, 30, 1, "%")}
-      ${createSliderControl("Zoom (%)", "card-zoom", params.zoom_percent ?? 100, 50, 250, 1, "%")}
-      ${createSliderControl("Posição X", "card-offset-x", params.offset_x ?? 0, -500, 500, 1, "")}
-      ${createSliderControl("Posição Y", "card-offset-y", params.offset_y ?? 0, -500, 500, 1, "")}
-    </div>
-
-    <div class="preview-actions">
-      <button type="button" class="btn btn-secondary btn-reprocess">Reprocessar</button>
-      <button type="button" class="btn btn-secondary btn-edit-mask">Corrigir recorte</button>
-      <button type="button" class="btn btn-success btn-download">Baixar JPG</button>
-    </div>
-  `;
-
-  card.querySelector(".btn-reprocess").addEventListener("click", async () => {
-    await reprocessFromCard(item.image_id);
-  });
-
-  card.querySelector(".btn-edit-mask").addEventListener("click", async () => {
-    await openEditor(item.image_id);
-  });
-
-  card.querySelector(".btn-download").addEventListener("click", () => {
-    window.open(item.download_url, "_blank");
-  });
-
-  card.querySelectorAll('input[type="range"][data-output]').forEach((slider) => {
-    updateSliderValue(slider);
-    slider.addEventListener("input", () => updateSliderValue(slider));
-  });
-
-  return card;
-}
-
-function renderItems() {
-  const items = Object.values(itemsState);
-
-  if (!items.length) {
-    previewGrid.innerHTML = "";
-    previewGrid.style.display = "none";
-    emptyState.style.display = "block";
-    return;
-  }
-
-  emptyState.style.display = "none";
-  previewGrid.style.display = "grid";
-  previewGrid.innerHTML = "";
-
-  items.forEach((item) => {
-    previewGrid.appendChild(createCard(item));
-  });
-}
-
-function updateItemState(item) {
-  itemsState[item.image_id] = item;
-  renderItems();
 }
 
 function resetLoadingSteps() {
@@ -243,18 +147,17 @@ function setLoadingStep(stepNumber, statusText = "em andamento") {
   });
 }
 
-function setLoadingProgress(value, stepLabel = "") {
+function setLoadingProgress(value, label = "") {
   currentProgress = Math.max(0, Math.min(100, value));
   loadingPercent.textContent = `${Math.round(currentProgress)}%`;
   loadingBarFill.style.width = `${currentProgress}%`;
-  if (stepLabel) loadingCurrentStep.textContent = stepLabel;
+  if (label) loadingCurrentStep.textContent = label;
 }
 
 function showLoading() {
   currentProgress = 0;
   resetLoadingSteps();
   setLoadingProgress(0, "Preparando lote...");
-  loadingSubtitle.textContent = "Aguarde enquanto o sistema envia, recorta, padroniza e prepara o painel comparativo.";
   loadingOverlay.classList.add("active");
 }
 
@@ -273,7 +176,7 @@ function startLoadingSimulation(fileCount) {
     { progress: 8, step: 1, label: "Separando arquivos do lote..." },
     { progress: 24, step: 2, label: "Enviando imagens ao servidor..." },
     { progress: 58, step: 3, label: `Removendo fundo e gerando máscara em ${fileCount} imagem(ns)...` },
-    { progress: 82, step: 4, label: "Montando prévias e comparativo..." },
+    { progress: 82, step: 4, label: "Montando grade e previews..." },
     { progress: 96, step: 5, label: "Finalizando painel de revisão..." },
   ];
 
@@ -364,6 +267,134 @@ function xhrPostJson(url, formData, onUploadProgress) {
   });
 }
 
+function resetWorkspace() {
+  itemsState = {};
+  activeImageId = null;
+  currentBatchId = null;
+  batchZipUrl = "#";
+  selectedImageIds = new Set();
+  workspace.classList.remove("active");
+  thumbGrid.innerHTML = "";
+  viewerStage.innerHTML = `<div class="viewer-empty">Nenhuma imagem selecionada.</div>`;
+  activePreviewMini.src = "";
+}
+
+function createThumbCard(item) {
+  const card = document.createElement("div");
+  card.className = "thumb-card";
+  card.dataset.imageId = item.image_id;
+
+  card.innerHTML = `
+    <div class="thumb-top">
+      <div class="thumb-name">${item.filename}</div>
+      <input class="thumb-check" type="checkbox" ${selectedImageIds.has(item.image_id) ? "checked" : ""}>
+    </div>
+    <div class="thumb-image">
+      <img src="${cacheBust(item.preview_url)}" alt="Miniatura">
+    </div>
+    <div class="thumb-meta">
+      <span>${item.params.margin_percent}%</span>
+      <span>${item.params.zoom_percent}%</span>
+    </div>
+  `;
+
+  card.addEventListener("click", (event) => {
+    if (event.target.classList.contains("thumb-check")) return;
+    setActiveImage(item.image_id);
+  });
+
+  const checkbox = card.querySelector(".thumb-check");
+  checkbox.addEventListener("change", (event) => {
+    if (event.target.checked) {
+      selectedImageIds.add(item.image_id);
+    } else {
+      selectedImageIds.delete(item.image_id);
+    }
+    renderThumbs();
+  });
+
+  if (item.image_id === activeImageId) {
+    card.classList.add("active");
+  }
+
+  return card;
+}
+
+function renderThumbs() {
+  thumbGrid.innerHTML = "";
+  const items = Object.values(itemsState);
+  items.forEach((item) => {
+    thumbGrid.appendChild(createThumbCard(item));
+  });
+}
+
+function getCurrentDisplayUrl(item) {
+  if (!item) return "";
+  if (currentViewMode === "original") return cacheBust(item.original_url);
+  if (currentViewMode === "mask") return cacheBust(item.mask_url);
+  return cacheBust(item.preview_url);
+}
+
+function renderViewer() {
+  const item = itemsState[activeImageId];
+  if (!item) {
+    viewerStage.innerHTML = `<div class="viewer-empty">Nenhuma imagem selecionada.</div>`;
+    activePreviewMini.src = "";
+    return;
+  }
+
+  viewerStage.innerHTML = `<img src="${getCurrentDisplayUrl(item)}" alt="Imagem ativa">`;
+  activePreviewMini.src = cacheBust(item.preview_url);
+
+  activeMarginInput.value = item.params.margin_percent ?? 8;
+  activeZoomInput.value = item.params.zoom_percent ?? 100;
+  activeXInput.value = item.params.offset_x ?? 0;
+  activeYInput.value = item.params.offset_y ?? 0;
+  activeQualityInput.value = item.params.jpeg_quality ?? 95;
+
+  [
+    activeMarginInput,
+    activeZoomInput,
+    activeXInput,
+    activeYInput,
+    activeQualityInput,
+  ].forEach(updateSliderValue);
+}
+
+function renderWorkspace() {
+  const items = Object.values(itemsState);
+  if (!items.length) {
+    workspace.classList.remove("active");
+    return;
+  }
+
+  workspace.classList.add("active");
+  renderThumbs();
+  renderViewer();
+
+  viewModeButtons.forEach((btn) => {
+    btn.classList.toggle("btn-primary", btn.dataset.view === currentViewMode);
+    btn.classList.toggle("btn-secondary", btn.dataset.view !== currentViewMode);
+  });
+}
+
+function setActiveImage(imageId) {
+  activeImageId = imageId;
+  if (!selectedImageIds.size) {
+    selectedImageIds.add(imageId);
+  }
+  renderWorkspace();
+}
+
+function updateItemState(item) {
+  itemsState[item.image_id] = item;
+  renderWorkspace();
+}
+
+function getSelectedIds() {
+  return Array.from(selectedImageIds);
+}
+
 async function processBatch(event) {
   event.preventDefault();
 
@@ -402,11 +433,15 @@ async function processBatch(event) {
       itemsState[item.image_id] = item;
     });
 
+    currentBatchId = data.batch_id;
     batchZipUrl = data.zip_url || "#";
-    renderItems();
+    activeImageId = data.items[0]?.image_id || null;
+    selectedImageIds = activeImageId ? new Set([activeImageId]) : new Set();
+
+    renderWorkspace();
     finishLoadingSuccess();
 
-    setStatus(`Concluído.\nImagens processadas: ${data.items.length}\nAgora você pode revisar, corrigir o recorte e baixar cada imagem.`);
+    setStatus(`Concluído.\nImagens processadas: ${data.items.length}\nClique na miniatura para abrir a imagem e revisar.`);
   } catch (error) {
     finishLoadingError(error.message);
     setStatus(error.message || "Falha ao processar o lote.");
@@ -415,45 +450,272 @@ async function processBatch(event) {
   }
 }
 
-async function reprocessFromCard(imageId) {
-  const item = itemsState[imageId];
-  const card = document.querySelector(`.preview-card[data-image-id="${imageId}"]`);
-  if (!item || !card) return;
+async function saveActiveImage({ centralize = false } = {}) {
+  const item = itemsState[activeImageId];
+  if (!item) {
+    setStatus("Selecione uma imagem.");
+    return;
+  }
 
-  const margin = Number(card.querySelector(".card-margin").value || 8);
-  const zoom = Number(card.querySelector(".card-zoom").value || 100);
-  const offsetX = Number(card.querySelector(".card-offset-x").value || 0);
-  const offsetY = Number(card.querySelector(".card-offset-y").value || 0);
-  const jpegQuality = Number(item.params?.jpeg_quality || jpegQualityInput.value || 95);
-
-  setStatus(`Reprocessando ${item.filename}...`);
+  setStatus(`Atualizando ${item.filename}...`);
 
   try {
-    const response = await fetch(`/api/reprocess/${imageId}`, {
+    const response = await fetch(`/api/reprocess/${item.image_id}`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        margin_percent: margin,
-        zoom_percent: zoom,
-        offset_x: offsetX,
-        offset_y: offsetY,
-        jpeg_quality: jpegQuality,
+        margin_percent: Number(activeMarginInput.value || 8),
+        zoom_percent: Number(activeZoomInput.value || 100),
+        offset_x: Number(activeXInput.value || 0),
+        offset_y: Number(activeYInput.value || 0),
+        jpeg_quality: Number(activeQualityInput.value || 95),
+        centralize,
+      }),
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || "Falha ao atualizar a imagem.");
+    }
+
+    updateItemState(data.item);
+    setStatus(`Imagem atualizada: ${data.item.filename}`);
+  } catch (error) {
+    setStatus(error.message || "Falha ao atualizar a imagem.");
+  }
+}
+
+async function applyToSelected({ centralize = false } = {}) {
+  if (!currentBatchId) {
+    setStatus("Nenhum lote carregado.");
+    return;
+  }
+
+  const ids = getSelectedIds();
+  if (!ids.length) {
+    setStatus("Selecione ao menos uma imagem.");
+    return;
+  }
+
+  setStatus(`Aplicando ajustes em ${ids.length} imagem(ns)...`);
+
+  try {
+    const response = await fetch(`/api/reprocess-batch/${currentBatchId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        image_ids: ids,
+        margin_percent: Number(marginInput.value || 8),
+        zoom_percent: Number(zoomPercentInput.value || 100),
+        offset_x: Number(offsetXInput.value || 0),
+        offset_y: Number(offsetYInput.value || 0),
+        jpeg_quality: Number(jpegQualityInput.value || 95),
+        centralize,
+      }),
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || "Falha ao aplicar ajustes.");
+    }
+
+    data.items.forEach((item) => {
+      itemsState[item.image_id] = item;
+    });
+
+    renderWorkspace();
+    setStatus(`Ajustes aplicados em ${data.items.length} imagem(ns).`);
+  } catch (error) {
+    setStatus(error.message || "Falha ao aplicar ajustes.");
+  }
+}
+
+async function openMaskEditor() {
+  const item = itemsState[activeImageId];
+  if (!item) {
+    setStatus("Selecione uma imagem.");
+    return;
+  }
+
+  setStatus(`Abrindo editor para ${item.filename}...`);
+
+  try {
+    const baseImage = await loadImage(item.isolated_url);
+    editor.baseImage = baseImage;
+    editor.item = item;
+    editor.imageId = item.image_id;
+
+    await loadMaskIntoCanvas(item.mask_url, baseImage.width, baseImage.height);
+
+    editor.compositeCanvas.width = baseImage.width;
+    editor.compositeCanvas.height = baseImage.height;
+
+    editor.history = [];
+    editor.historyIndex = -1;
+    saveHistorySnapshot();
+
+    modalTitle.textContent = `Correção manual do recorte — ${item.filename}`;
+
+    editorMarginInput.value = item.params.margin_percent ?? 8;
+    editorFinalZoomInput.value = item.params.zoom_percent ?? 100;
+    editorOffsetXInput.value = item.params.offset_x ?? 0;
+    editorOffsetYInput.value = item.params.offset_y ?? 0;
+    editorJpegQualityInput.value = item.params.jpeg_quality ?? 95;
+    editorZoomViewInput.value = 100;
+    brushSizeInput.value = 28;
+
+    [
+      brushSizeInput,
+      editorZoomViewInput,
+      editorMarginInput,
+      editorFinalZoomInput,
+      editorOffsetXInput,
+      editorOffsetYInput,
+      editorJpegQualityInput,
+    ].forEach(updateSliderValue);
+
+    editorModal.classList.add("active");
+
+    setTimeout(() => {
+      resizeEditorCanvas();
+      fitEditorView();
+      drawEditor();
+    }, 50);
+
+    setStatus(`Editor aberto: ${item.filename}`);
+  } catch {
+    setStatus("Não foi possível abrir o editor manual.");
+  }
+}
+
+function closeEditor() {
+  editorModal.classList.remove("active");
+  editor.imageId = null;
+  editor.item = null;
+  editor.baseImage = null;
+}
+
+async function saveEditorChanges() {
+  const item = editor.item;
+  if (!item) return;
+
+  saveMaskBtn.disabled = true;
+  setStatus(`Salvando correção de recorte em ${item.filename}...`);
+
+  try {
+    const response = await fetch(`/api/reprocess/${item.image_id}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        margin_percent: Number(editorMarginInput.value || 8),
+        zoom_percent: Number(editorFinalZoomInput.value || 100),
+        offset_x: Number(editorOffsetXInput.value || 0),
+        offset_y: Number(editorOffsetYInput.value || 0),
+        jpeg_quality: Number(editorJpegQualityInput.value || 95),
+        mask_data_url: editor.maskCanvas.toDataURL("image/png"),
       }),
     });
 
     const data = await response.json();
 
     if (!response.ok) {
-      throw new Error(data.error || "Falha ao reprocessar a imagem.");
+      throw new Error(data.error || "Falha ao salvar a correção.");
     }
 
-    updateItemState(data.item);
-    setStatus(`Imagem atualizada: ${data.item.filename}`);
+    itemsState[item.image_id] = data.item;
+    activeImageId = data.item.image_id;
+    editor.item = data.item;
+    editorPreviewFinal.src = cacheBust(data.item.preview_url);
+    renderWorkspace();
+    setStatus(`Correção salva: ${data.item.filename}`);
   } catch (error) {
-    setStatus(error.message || "Falha ao reprocessar a imagem.");
+    setStatus(error.message || "Falha ao salvar a correção.");
+  } finally {
+    saveMaskBtn.disabled = false;
   }
+}
+
+function setTool(tool) {
+  editor.tool = tool;
+  toolButtons.forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.tool === tool);
+  });
+  editorCanvas.style.cursor = tool === "pan" ? "grab" : "crosshair";
+}
+
+function getCanvasCoords(event) {
+  const rect = editorCanvas.getBoundingClientRect();
+  return {
+    canvasX: event.clientX - rect.left,
+    canvasY: event.clientY - rect.top,
+  };
+}
+
+function handlePointerDown(event) {
+  if (!editor.baseImage) return;
+
+  const pt = getCanvasCoords(event);
+  const imgPt = canvasPointToImagePoint(pt.canvasX, pt.canvasY);
+  editor.lastPoint = { ...pt };
+
+  if (editor.tool === "pan") {
+    editor.panning = true;
+    return;
+  }
+
+  if (imgPt?.outside) return;
+
+  editor.drawing = true;
+  editor.lastPoint = { ...pt, ...imgPt };
+  drawOnMask(imgPt, imgPt);
+  drawEditor();
+}
+
+function handlePointerMove(event) {
+  if (!editor.baseImage) return;
+
+  const pt = getCanvasCoords(event);
+  const imgPt = canvasPointToImagePoint(pt.canvasX, pt.canvasY);
+  editor.lastPoint = { ...pt };
+
+  if (editor.panning) {
+    const movementX = event.movementX || 0;
+    const movementY = event.movementY || 0;
+    editor.panX += movementX;
+    editor.panY += movementY;
+    drawEditor();
+    return;
+  }
+
+  if (!editor.drawing || !imgPt || imgPt.outside) {
+    drawEditor();
+    return;
+  }
+
+  const from = editor.lastPoint && editor.lastPoint.imgX !== undefined ? editor.lastPoint : imgPt;
+  drawOnMask(from, imgPt);
+  editor.lastPoint = { ...pt, ...imgPt };
+  drawEditor();
+}
+
+function handlePointerUp() {
+  if (editor.drawing) {
+    editor.drawing = false;
+    saveHistorySnapshot();
+  }
+  editor.panning = false;
+}
+
+function handleWheel(event) {
+  if (!editor.baseImage) return;
+  event.preventDefault();
+
+  const delta = event.deltaY < 0 ? 1.08 : 0.92;
+  editor.zoom *= delta;
+  editor.zoom = Math.max(0.2, Math.min(6, editor.zoom));
+  editorZoomViewInput.value = Math.round(editor.zoom * 100);
+  updateSliderValue(editorZoomViewInput);
+  drawEditor();
 }
 
 function fitEditorView() {
@@ -691,7 +953,6 @@ function getAlphaBoundingBox(canvas) {
   }
 
   if (maxX < minX || maxY < minY) return null;
-
   return { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 };
 }
 
@@ -713,206 +974,75 @@ async function loadMaskIntoCanvas(maskUrl, width, height) {
   editor.maskCtx.drawImage(img, 0, 0, width, height);
 }
 
-async function openEditor(imageId) {
-  const item = itemsState[imageId];
-  if (!item) return;
-
-  setStatus(`Abrindo editor para ${item.filename}...`);
-
-  try {
-    const baseImage = await loadImage(item.isolated_url);
-    editor.baseImage = baseImage;
-    editor.item = item;
-    editor.imageId = imageId;
-
-    await loadMaskIntoCanvas(item.mask_url, baseImage.width, baseImage.height);
-
-    editor.compositeCanvas.width = baseImage.width;
-    editor.compositeCanvas.height = baseImage.height;
-
-    editor.history = [];
-    editor.historyIndex = -1;
-    saveHistorySnapshot();
-
-    modalTitle.textContent = `Correção manual do recorte — ${item.filename}`;
-
-    editorMarginInput.value = item.params.margin_percent ?? 8;
-    editorFinalZoomInput.value = item.params.zoom_percent ?? 100;
-    editorOffsetXInput.value = item.params.offset_x ?? 0;
-    editorOffsetYInput.value = item.params.offset_y ?? 0;
-    editorJpegQualityInput.value = item.params.jpeg_quality ?? 95;
-    editorZoomViewInput.value = 100;
-    brushSizeInput.value = 28;
-
-    [
-      brushSizeInput,
-      editorZoomViewInput,
-      editorMarginInput,
-      editorFinalZoomInput,
-      editorOffsetXInput,
-      editorOffsetYInput,
-      editorJpegQualityInput,
-    ].forEach(updateSliderValue);
-
-    editorModal.classList.add("active");
-
-    setTimeout(() => {
-      resizeEditorCanvas();
-      fitEditorView();
-      drawEditor();
-    }, 50);
-
-    setStatus(`Editor aberto: ${item.filename}`);
-  } catch {
-    setStatus("Não foi possível abrir o editor manual.");
-  }
-}
-
-function closeEditor() {
-  editorModal.classList.remove("active");
-  editor.imageId = null;
-  editor.item = null;
-  editor.baseImage = null;
-}
-
-async function saveEditorChanges() {
-  const item = editor.item;
-  if (!item) return;
-
-  saveMaskBtn.disabled = true;
-  setStatus(`Salvando correção de recorte em ${item.filename}...`);
-
-  try {
-    const response = await fetch(`/api/reprocess/${item.image_id}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        margin_percent: Number(editorMarginInput.value || 8),
-        zoom_percent: Number(editorFinalZoomInput.value || 100),
-        offset_x: Number(editorOffsetXInput.value || 0),
-        offset_y: Number(editorOffsetYInput.value || 0),
-        jpeg_quality: Number(editorJpegQualityInput.value || 95),
-        mask_data_url: editor.maskCanvas.toDataURL("image/png"),
-      }),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.error || "Falha ao salvar a correção.");
-    }
-
-    itemsState[item.image_id] = data.item;
-    renderItems();
-    editor.item = data.item;
-    editorPreviewFinal.src = cacheBust(data.item.preview_url);
-    setStatus(`Correção salva: ${data.item.filename}`);
-  } catch (error) {
-    setStatus(error.message || "Falha ao salvar a correção.");
-  } finally {
-    saveMaskBtn.disabled = false;
-  }
-}
-
-function setTool(tool) {
-  editor.tool = tool;
-  toolButtons.forEach((btn) => {
-    btn.classList.toggle("active", btn.dataset.tool === tool);
-  });
-  editorCanvas.style.cursor = tool === "pan" ? "grab" : "crosshair";
-}
-
-function getCanvasCoords(event) {
-  const rect = editorCanvas.getBoundingClientRect();
-  return {
-    canvasX: event.clientX - rect.left,
-    canvasY: event.clientY - rect.top,
-  };
-}
-
-function handlePointerDown(event) {
-  if (!editor.baseImage) return;
-
-  const pt = getCanvasCoords(event);
-  const imgPt = canvasPointToImagePoint(pt.canvasX, pt.canvasY);
-  editor.lastPoint = { ...pt };
-
-  if (editor.tool === "pan") {
-    editor.panning = true;
+function renderViewer() {
+  const item = itemsState[activeImageId];
+  if (!item) {
+    viewerStage.innerHTML = `<div class="viewer-empty">Nenhuma imagem selecionada.</div>`;
+    activePreviewMini.src = "";
     return;
   }
 
-  if (imgPt?.outside) return;
+  viewerStage.innerHTML = `<img src="${getCurrentDisplayUrl(item)}" alt="Imagem ativa">`;
+  activePreviewMini.src = cacheBust(item.preview_url);
 
-  editor.drawing = true;
-  editor.lastPoint = { ...pt, ...imgPt };
-  drawOnMask(imgPt, imgPt);
-  drawEditor();
+  activeMarginInput.value = item.params.margin_percent ?? 8;
+  activeZoomInput.value = item.params.zoom_percent ?? 100;
+  activeXInput.value = item.params.offset_x ?? 0;
+  activeYInput.value = item.params.offset_y ?? 0;
+  activeQualityInput.value = item.params.jpeg_quality ?? 95;
+
+  [activeMarginInput, activeZoomInput, activeXInput, activeYInput, activeQualityInput].forEach(updateSliderValue);
 }
 
-function handlePointerMove(event) {
-  if (!editor.baseImage) return;
-
-  const pt = getCanvasCoords(event);
-  const imgPt = canvasPointToImagePoint(pt.canvasX, pt.canvasY);
-  editor.lastPoint = { ...pt };
-
-  if (editor.panning) {
-    const movementX = event.movementX || 0;
-    const movementY = event.movementY || 0;
-    editor.panX += movementX;
-    editor.panY += movementY;
-    drawEditor();
-    return;
-  }
-
-  if (!editor.drawing || !imgPt || imgPt.outside) {
-    drawEditor();
-    return;
-  }
-
-  const from = editor.lastPoint && editor.lastPoint.imgX !== undefined ? editor.lastPoint : imgPt;
-  drawOnMask(from, imgPt);
-  editor.lastPoint = { ...pt, ...imgPt };
-  drawEditor();
-}
-
-function handlePointerUp() {
-  if (editor.drawing) {
-    editor.drawing = false;
-    saveHistorySnapshot();
-  }
-  editor.panning = false;
-}
-
-function handleWheel(event) {
-  if (!editor.baseImage) return;
-  event.preventDefault();
-
-  const delta = event.deltaY < 0 ? 1.08 : 0.92;
-  editor.zoom *= delta;
-  editor.zoom = Math.max(0.2, Math.min(6, editor.zoom));
-  editorZoomViewInput.value = Math.round(editor.zoom * 100);
-  updateSliderValue(editorZoomViewInput);
-  drawEditor();
-}
-
-function bindGlobalEvents() {
+function bindEvents() {
   form.addEventListener("submit", processBatch);
 
   zipBtn.addEventListener("click", () => {
     if (batchZipUrl && batchZipUrl !== "#") {
       window.open(batchZipUrl, "_blank");
     } else {
-      setStatus("Ainda não há um lote processado para baixar.");
+      setStatus("Ainda não há um lote processado.");
     }
   });
 
   clearBtn.addEventListener("click", () => {
     filesInput.value = "";
-    resetPanel();
+    resetWorkspace();
+    setStatus("Aguardando envio das imagens.");
+  });
+
+  selectAllBtn.addEventListener("click", () => {
+    selectedImageIds = new Set(Object.keys(itemsState));
+    renderWorkspace();
+  });
+
+  clearSelectionBtn.addEventListener("click", () => {
+    selectedImageIds = new Set();
+    if (activeImageId) selectedImageIds.add(activeImageId);
+    renderWorkspace();
+  });
+
+  applySelectedBtn.addEventListener("click", () => applyToSelected({ centralize: false }));
+  centerSelectedBtn.addEventListener("click", () => applyToSelected({ centralize: true }));
+
+  saveActiveBtn.addEventListener("click", () => saveActiveImage({ centralize: false }));
+  centerActiveBtn.addEventListener("click", () => saveActiveImage({ centralize: true }));
+  openMaskEditorBtn.addEventListener("click", openMaskEditor);
+
+  downloadActiveBtn.addEventListener("click", () => {
+    const item = itemsState[activeImageId];
+    if (item?.download_url) {
+      window.open(item.download_url, "_blank");
+    } else {
+      setStatus("Selecione uma imagem.");
+    }
+  });
+
+  viewModeButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      currentViewMode = btn.dataset.view;
+      renderWorkspace();
+    });
   });
 
   closeEditorBtn.addEventListener("click", closeEditor);
@@ -969,6 +1099,6 @@ function bindGlobalEvents() {
   });
 }
 
-bindGlobalEvents();
+bindEvents();
 initSliders();
-resetPanel();
+resetWorkspace();
