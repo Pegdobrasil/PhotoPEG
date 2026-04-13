@@ -42,6 +42,17 @@ class ReprocessPayload(BaseModel):
     offset_y: int = Field(default=0, ge=-500, le=500)
     jpeg_quality: int = Field(default=95, ge=70, le=100)
     mask_data_url: str | None = None
+    centralize: bool = False
+
+
+class BatchReprocessPayload(BaseModel):
+    image_ids: list[str] = Field(default_factory=list)
+    margin_percent: int = Field(default=8, ge=0, le=30)
+    zoom_percent: int = Field(default=100, ge=50, le=250)
+    offset_x: int = Field(default=0, ge=-500, le=500)
+    offset_y: int = Field(default=0, ge=-500, le=500)
+    jpeg_quality: int = Field(default=95, ge=70, le=100)
+    centralize: bool = False
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -98,7 +109,6 @@ def get_meta_path(image_id: str) -> Path:
     rel = index_data.get(image_id)
     if not rel:
         raise HTTPException(status_code=404, detail="Imagem não encontrada.")
-
     meta_path = BASE_DIR / rel
     if not meta_path.exists():
         raise HTTPException(status_code=404, detail="Metadados não encontrados.")
@@ -180,8 +190,7 @@ def compose_final_jpg(
     max_h = max(1, output_size - (margin_px * 2))
 
     fit_scale = min(max_w / iw, max_h / ih)
-    zoom_scale = zoom_percent / 100.0
-    final_scale = fit_scale * zoom_scale
+    final_scale = fit_scale * (zoom_percent / 100.0)
 
     new_w = max(1, int(iw * final_scale))
     new_h = max(1, int(ih * final_scale))
@@ -212,6 +221,63 @@ def build_public_item(meta: dict) -> dict:
         "download_url": meta["download_url"],
         "params": meta["params"],
     }
+
+
+def update_item_preview(
+    meta: dict,
+    *,
+    margin_percent: int,
+    zoom_percent: int,
+    offset_x: int,
+    offset_y: int,
+    jpeg_quality: int,
+    centralize: bool = False,
+    mask_data_url: str | None = None,
+) -> dict:
+    meta_path = get_meta_path(meta["image_id"])
+    item_dir = meta_path.parent
+
+    isolated_path = item_dir / Path(meta["isolated_url"]).name
+    mask_path = item_dir / Path(meta["mask_url"]).name
+    preview_path = item_dir / Path(meta["preview_url"]).name
+
+    isolated_rgba = Image.open(isolated_path).convert("RGBA")
+
+    if mask_data_url:
+      mask_bytes = decode_data_url(mask_data_url)
+      mask_img = Image.open(BytesIO(mask_bytes)).convert("L").resize(
+          isolated_rgba.size,
+          Image.LANCZOS,
+      )
+      mask_img.save(mask_path)
+    else:
+      mask_img = Image.open(mask_path).convert("L")
+
+    if centralize:
+        offset_x = 0
+        offset_y = 0
+
+    edited_bytes = compose_final_jpg(
+        isolated_rgba=isolated_rgba,
+        mask_img=mask_img,
+        output_size=1000,
+        margin_percent=margin_percent,
+        zoom_percent=zoom_percent,
+        offset_x=offset_x,
+        offset_y=offset_y,
+        jpeg_quality=jpeg_quality,
+    )
+    preview_path.write_bytes(edited_bytes)
+
+    meta["params"] = {
+        "margin_percent": margin_percent,
+        "zoom_percent": zoom_percent,
+        "offset_x": offset_x,
+        "offset_y": offset_y,
+        "jpeg_quality": jpeg_quality,
+    }
+    write_meta(meta)
+    return meta
 
 
 @app.post("/api/process-preview")
@@ -341,57 +407,68 @@ async def process_preview(
 def reprocess_image(image_id: str, payload: ReprocessPayload):
     try:
         meta = read_meta(image_id)
-        meta_path = get_meta_path(image_id)
-        item_dir = meta_path.parent
-
-        isolated_path = item_dir / Path(meta["isolated_url"]).name
-        mask_path = item_dir / Path(meta["mask_url"]).name
-        preview_path = item_dir / Path(meta["preview_url"]).name
-
-        isolated_rgba = Image.open(isolated_path).convert("RGBA")
-
-        if payload.mask_data_url:
-            mask_bytes = decode_data_url(payload.mask_data_url)
-            mask_img = Image.open(BytesIO(mask_bytes)).convert("L").resize(
-                isolated_rgba.size,
-                Image.LANCZOS,
-            )
-            mask_img.save(mask_path)
-        else:
-            mask_img = Image.open(mask_path).convert("L")
-
-        edited_bytes = compose_final_jpg(
-            isolated_rgba=isolated_rgba,
-            mask_img=mask_img,
-            output_size=1000,
+        updated = update_item_preview(
+            meta,
             margin_percent=payload.margin_percent,
             zoom_percent=payload.zoom_percent,
             offset_x=payload.offset_x,
             offset_y=payload.offset_y,
             jpeg_quality=payload.jpeg_quality,
+            centralize=payload.centralize,
+            mask_data_url=payload.mask_data_url,
         )
-        preview_path.write_bytes(edited_bytes)
-
-        meta["params"] = {
-            "margin_percent": payload.margin_percent,
-            "zoom_percent": payload.zoom_percent,
-            "offset_x": payload.offset_x,
-            "offset_y": payload.offset_y,
-            "jpeg_quality": payload.jpeg_quality,
-        }
-        write_meta(meta)
-
-        return {
-            "success": True,
-            "item": build_public_item(meta),
-        }
-
+        return {"success": True, "item": build_public_item(updated)}
     except Exception as exc:
         print(f"Erro em /api/reprocess/{image_id}")
         print(traceback.format_exc())
         return JSONResponse(
             status_code=500,
             content={"error": f"Falha ao reprocessar a imagem: {str(exc)}"},
+        )
+
+
+@app.post("/api/reprocess-batch/{batch_id}")
+def reprocess_batch(batch_id: str, payload: BatchReprocessPayload):
+    try:
+        batch_dir = BATCHES_DIR / batch_id
+        if not batch_dir.exists():
+            raise HTTPException(status_code=404, detail="Lote não encontrado.")
+
+        target_ids = set(payload.image_ids)
+        items = []
+
+        for item_dir in sorted(batch_dir.iterdir()):
+            if not item_dir.is_dir():
+                continue
+
+            meta_file = item_dir / "meta.json"
+            if not meta_file.exists():
+                continue
+
+            meta = json.loads(meta_file.read_text(encoding="utf-8"))
+
+            if target_ids and meta["image_id"] not in target_ids:
+                continue
+
+            updated = update_item_preview(
+                meta,
+                margin_percent=payload.margin_percent,
+                zoom_percent=payload.zoom_percent,
+                offset_x=payload.offset_x,
+                offset_y=payload.offset_y,
+                jpeg_quality=payload.jpeg_quality,
+                centralize=payload.centralize,
+                mask_data_url=None,
+            )
+            items.append(build_public_item(updated))
+
+        return {"success": True, "items": items}
+    except Exception as exc:
+        print(f"Erro em /api/reprocess-batch/{batch_id}")
+        print(traceback.format_exc())
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Falha ao reprocessar o lote: {str(exc)}"},
         )
 
 
