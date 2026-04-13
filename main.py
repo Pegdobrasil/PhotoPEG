@@ -32,7 +32,7 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.mount("/media", StaticFiles(directory=STORAGE_DIR), name="media")
 
 bg_session = None
-MAX_FILES_PER_BATCH = 50
+MAX_FILES_PER_BATCH = 10
 
 
 class ReprocessPayload(BaseModel):
