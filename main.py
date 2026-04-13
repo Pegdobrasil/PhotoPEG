@@ -32,7 +32,7 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.mount("/media", StaticFiles(directory=STORAGE_DIR), name="media")
 
 bg_session = None
-MAX_FILES_PER_BATCH = 10
+MAX_FILES_PER_BATCH = 50
 
 
 class ReprocessPayload(BaseModel):
@@ -244,14 +244,14 @@ def update_item_preview(
     isolated_rgba = Image.open(isolated_path).convert("RGBA")
 
     if mask_data_url:
-      mask_bytes = decode_data_url(mask_data_url)
-      mask_img = Image.open(BytesIO(mask_bytes)).convert("L").resize(
-          isolated_rgba.size,
-          Image.LANCZOS,
-      )
-      mask_img.save(mask_path)
+        mask_bytes = decode_data_url(mask_data_url)
+        mask_img = Image.open(BytesIO(mask_bytes)).convert("L").resize(
+            isolated_rgba.size,
+            Image.LANCZOS,
+        )
+        mask_img.save(mask_path)
     else:
-      mask_img = Image.open(mask_path).convert("L")
+        mask_img = Image.open(mask_path).convert("L")
 
     if centralize:
         offset_x = 0
