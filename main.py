@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import re
 import traceback
@@ -12,6 +13,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from PIL import Image
+from pydantic import BaseModel
 from rembg import new_session, remove
 
 app = FastAPI(title="PhotoPEG Studio")
@@ -34,6 +36,10 @@ DEFAULT_MARGIN_PERCENT = 8
 DEFAULT_JPEG_QUALITY = 95
 
 bg_session = None
+
+
+class SaveEditedPayload(BaseModel):
+    data_url: str
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -70,6 +76,11 @@ def safe_stem(filename: str) -> str:
     stem = Path(filename).stem
     stem = re.sub(r"[^a-zA-Z0-9\-_]+", "-", stem).strip("-")
     return stem or "imagem"
+
+
+def media_url(path: Path) -> str:
+    rel = path.relative_to(STORAGE_DIR).as_posix()
+    return f"/media/{rel}"
 
 
 def remove_background(raw_bytes: bytes) -> Image.Image:
@@ -114,9 +125,11 @@ def compose_final_jpg(
     return output.read()
 
 
-def media_url(path: Path) -> str:
-    rel = path.relative_to(STORAGE_DIR).as_posix()
-    return f"/media/{rel}"
+def decode_data_url(data_url: str) -> bytes:
+    if "," not in data_url:
+        raise ValueError("Data URL inválida.")
+    _, encoded = data_url.split(",", 1)
+    return base64.b64decode(encoded)
 
 
 @app.post("/api/process-batch")
@@ -151,15 +164,21 @@ async def process_batch(
             if not raw:
                 continue
 
-            print(f"Processando arquivo: {file.filename}")
-
             clean_name = safe_stem(file.filename)
             image_id = uuid.uuid4().hex[:10]
             item_dir = batch_dir / image_id
             item_dir.mkdir(parents=True, exist_ok=True)
 
+            isolated_rgba = remove_background(raw)
+            isolated_path = item_dir / f"{clean_name}_isolated.png"
+            isolated_rgba.save(isolated_path)
+
+            alpha_mask = isolated_rgba.getchannel("A").convert("L")
+            mask_path = item_dir / f"{clean_name}_mask.png"
+            alpha_mask.save(mask_path)
+
             final_jpg = compose_final_jpg(
-                isolated_rgba=remove_background(raw),
+                isolated_rgba=isolated_rgba,
                 output_size=OUTPUT_SIZE,
                 margin_percent=margin_percent,
                 jpeg_quality=jpeg_quality,
@@ -176,10 +195,11 @@ async def process_batch(
                     "output_filename": output_filename,
                     "preview_url": media_url(output_path),
                     "download_url": f"/download/image/{batch_id}/{image_id}",
+                    "isolated_url": media_url(isolated_path),
+                    "mask_url": media_url(mask_path),
+                    "save_url": f"/api/save-edited/{batch_id}/{image_id}",
                 }
             )
-
-            print(f"Arquivo final gerado: {output_filename}")
 
         if not processed_items:
             return JSONResponse(
@@ -211,6 +231,42 @@ async def process_batch(
         return JSONResponse(
             status_code=500,
             content={"error": f"Erro interno no processamento: {str(exc)}"},
+        )
+
+
+@app.post("/api/save-edited/{batch_id}/{image_id}")
+async def save_edited(batch_id: str, image_id: str, payload: SaveEditedPayload):
+    try:
+        batch_dir = BATCHES_DIR / batch_id
+        if not batch_dir.exists():
+            raise HTTPException(status_code=404, detail="Lote não encontrado.")
+
+        item_dir = batch_dir / image_id
+        if not item_dir.exists():
+            raise HTTPException(status_code=404, detail="Imagem não encontrada.")
+
+        jpg_files = list(item_dir.glob("*.jpg"))
+        if not jpg_files:
+            raise HTTPException(status_code=404, detail="Arquivo JPG não encontrado.")
+
+        file_path = jpg_files[0]
+        raw = decode_data_url(payload.data_url)
+
+        img = Image.open(BytesIO(raw)).convert("RGB")
+        img.save(file_path, format="JPEG", quality=95, optimize=True)
+
+        return {
+            "success": True,
+            "preview_url": media_url(file_path),
+            "download_url": f"/download/image/{batch_id}/{image_id}",
+        }
+
+    except Exception as exc:
+        print("Erro em /api/save-edited")
+        print(traceback.format_exc())
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Falha ao salvar a imagem editada: {str(exc)}"},
         )
 
 
