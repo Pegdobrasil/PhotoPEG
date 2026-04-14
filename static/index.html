@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PhotoPEG Studio</title>
 
-  <link rel="icon" href="/static/favicon-32x32.png?v=18" sizes="32x32" type="image/png">
-  <link rel="shortcut icon" href="/static/favicon-32x32.png?v=18" type="image/png">
-  <link rel="apple-touch-icon" href="/static/favicon-32x32.png?v=18">
+  <link rel="icon" href="/static/favicon-32x32.png?v=19" sizes="32x32" type="image/png">
+  <link rel="shortcut icon" href="/static/favicon-32x32.png?v=19" type="image/png">
+  <link rel="apple-touch-icon" href="/static/favicon-32x32.png?v=19">
 
   <style>
     * { box-sizing: border-box; }
@@ -75,7 +75,6 @@
       max-width: 100%;
       height: auto;
       display: block;
-      transition: var(--transition);
     }
 
     .brand-text {
@@ -222,6 +221,7 @@
 
     .intro-step.active .intro-dot { background: var(--blue-2); }
     .intro-step.done .intro-dot { background: var(--green); }
+
     .intro-step-status {
       font-size: 11px;
       text-transform: uppercase;
@@ -433,19 +433,33 @@
       display: block;
     }
 
+    .gallery-title {
+      margin: 0 0 6px;
+      font-size: 22px;
+      font-weight: 800;
+    }
+
+    .gallery-subtitle {
+      margin: 0 0 16px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
     .gallery-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-      gap: 14px;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 18px;
+      align-items: start;
     }
 
     .gallery-card {
       border: 1px solid rgba(130, 166, 255, 0.12);
-      border-radius: 16px;
+      border-radius: 18px;
       background: rgba(255,255,255,0.03);
-      padding: 12px;
+      padding: 16px;
       display: grid;
-      gap: 10px;
+      gap: 14px;
+      align-content: start;
     }
 
     .gallery-name {
@@ -453,39 +467,30 @@
       font-weight: 700;
       color: #e7efff;
       word-break: break-word;
+      line-height: 1.4;
     }
 
     .gallery-meta {
       font-size: 12px;
       color: var(--muted);
-      line-height: 1.4;
-    }
-
-    .gallery-rename {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 8px;
-    }
-
-    .gallery-rename input {
-      min-height: 40px;
-      border-radius: 10px;
-      border: 1px solid rgba(255,255,255,0.08);
-      background: rgba(255,255,255,0.04);
-      color: #f3f7ff;
-      padding: 0 10px;
+      line-height: 1.5;
+      margin-top: -4px;
     }
 
     .gallery-preview {
       width: 100%;
-      aspect-ratio: 1 / 1;
-      border-radius: 12px;
+      height: 280px;
+      border-radius: 14px;
       overflow: hidden;
       background:
         linear-gradient(45deg, #f2f5fb 25%, #ffffff 25%, #ffffff 50%, #f2f5fb 50%, #f2f5fb 75%, #ffffff 75%, #ffffff 100%);
       background-size: 20px 20px;
       border: 1px solid rgba(255,255,255,0.06);
       cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
     }
 
     .gallery-preview.transparent-bg {
@@ -495,10 +500,47 @@
     }
 
     .gallery-preview img {
-      width: 100%;
-      height: 100%;
+      max-width: 100%;
+      max-height: 100%;
+      width: auto;
+      height: auto;
       object-fit: contain;
       display: block;
+    }
+
+    .gallery-rename {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 130px;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .gallery-rename input {
+      min-height: 44px;
+      width: 100%;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.04);
+      color: #f3f7ff;
+      padding: 0 12px;
+      font-size: 14px;
+    }
+
+    .gallery-rename .btn {
+      width: 100%;
+      min-height: 44px;
+      padding: 0 14px;
+    }
+
+    .gallery-card .result-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .gallery-card .result-actions .btn,
+    .gallery-card .result-actions a {
+      width: 100%;
     }
 
     .editor-modal {
@@ -537,6 +579,12 @@
       align-items: center;
       gap: 12px;
       flex-wrap: wrap;
+    }
+
+    .editor-title {
+      margin: 0;
+      font-size: 22px;
+      font-weight: 800;
     }
 
     .editor-layout {
@@ -799,7 +847,16 @@
       .config-grid, .field-inline { grid-template-columns: 1fr; }
       .canvas-stage { min-height: 420px; padding: 8px; }
       .canvas-viewport { min-width: 560px; min-height: 560px; }
-      .gallery-rename { grid-template-columns: 1fr; }
+      .gallery-rename {
+        grid-template-columns: 1fr;
+        gap: 10px;
+      }
+      .gallery-preview {
+        height: 240px;
+      }
+      .gallery-card .result-actions {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
 </head>
@@ -931,16 +988,16 @@
         <div class="status-box" id="status">Aguardando envio das imagens.</div>
 
         <div id="resultBox" class="result-box">
-          <div>Lote processado</div>
-          <div id="resultText">Seu lote foi concluído com sucesso.</div>
+          <div class="gallery-title">Lote processado</div>
+          <div id="resultText" class="gallery-subtitle">Seu lote foi concluído com sucesso.</div>
           <div class="result-actions">
             <a id="zipDownloadBtn" class="btn btn-success" href="#" target="_blank" rel="noopener noreferrer">Baixar ZIP</a>
           </div>
         </div>
 
         <div id="galleryBox" class="gallery-box">
-          <div>Imagens processadas</div>
-          <div>Clique no card para editar ou renomeie o arquivo antes de baixar.</div>
+          <h3 class="gallery-title">Imagens processadas</h3>
+          <p class="gallery-subtitle">Clique no card para editar ou renomeie o arquivo antes de baixar.</p>
           <div id="galleryGrid" class="gallery-grid"></div>
         </div>
       </div>
@@ -1163,6 +1220,6 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=18"></script>
+  <script src="/static/app.js?v=19"></script>
 </body>
 </html>
