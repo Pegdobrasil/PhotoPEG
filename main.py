@@ -114,6 +114,11 @@ def compose_final_jpg(
     return output.read()
 
 
+def media_url(path: Path) -> str:
+    rel = path.relative_to(STORAGE_DIR).as_posix()
+    return f"/media/{rel}"
+
+
 @app.post("/api/process-batch")
 async def process_batch(
     files: list[UploadFile] = File(...),
@@ -153,9 +158,8 @@ async def process_batch(
             item_dir = batch_dir / image_id
             item_dir.mkdir(parents=True, exist_ok=True)
 
-            isolated_rgba = remove_background(raw)
             final_jpg = compose_final_jpg(
-                isolated_rgba=isolated_rgba,
+                isolated_rgba=remove_background(raw),
                 output_size=OUTPUT_SIZE,
                 margin_percent=margin_percent,
                 jpeg_quality=jpeg_quality,
@@ -170,7 +174,7 @@ async def process_batch(
                     "image_id": image_id,
                     "filename": file.filename,
                     "output_filename": output_filename,
-                    "preview_url": f"/download/image/{batch_id}/{image_id}",
+                    "preview_url": media_url(output_path),
                     "download_url": f"/download/image/{batch_id}/{image_id}",
                 }
             )
