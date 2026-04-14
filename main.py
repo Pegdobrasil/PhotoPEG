@@ -31,7 +31,8 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.mount("/media", StaticFiles(directory=STORAGE_DIR), name="media")
 
 MAX_FILES_PER_BATCH = 50
-OUTPUT_SIZE = 1000
+DEFAULT_OUTPUT_WIDTH = 1000
+DEFAULT_OUTPUT_HEIGHT = 1000
 DEFAULT_MARGIN_PERCENT = 8
 DEFAULT_JPEG_QUALITY = 95
 
@@ -59,9 +60,10 @@ def health():
         "status": "ok",
         "session_loaded": bg_session is not None,
         "max_files_per_batch": MAX_FILES_PER_BATCH,
-        "output_size": OUTPUT_SIZE,
-        "output_format": "jpg",
-        "background": "white",
+        "default_output_width": DEFAULT_OUTPUT_WIDTH,
+        "default_output_height": DEFAULT_OUTPUT_HEIGHT,
+        "default_output_format": "jpg",
+        "default_background": "white",
     }
 
 
@@ -89,12 +91,39 @@ def remove_background(raw_bytes: bytes) -> Image.Image:
     return Image.open(BytesIO(result)).convert("RGBA")
 
 
-def compose_final_jpg(
+def normalize_output_options(
+    output_format: str,
+    background_mode: str,
+    output_width: int,
+    output_height: int,
+) -> tuple[str, str, int, int]:
+    output_format = (output_format or "jpg").lower().strip()
+    background_mode = (background_mode or "white").lower().strip()
+
+    if output_format not in {"jpg", "jpeg", "png"}:
+        output_format = "jpg"
+
+    if background_mode not in {"white", "transparent"}:
+        background_mode = "white"
+
+    if output_format in {"jpg", "jpeg"}:
+        background_mode = "white"
+
+    output_width = max(100, min(5000, int(output_width)))
+    output_height = max(100, min(5000, int(output_height)))
+
+    return output_format, background_mode, output_width, output_height
+
+
+def compose_output_image(
     isolated_rgba: Image.Image,
-    output_size: int = OUTPUT_SIZE,
-    margin_percent: int = DEFAULT_MARGIN_PERCENT,
+    output_width: int,
+    output_height: int,
+    margin_percent: int,
+    output_format: str,
+    background_mode: str,
     jpeg_quality: int = DEFAULT_JPEG_QUALITY,
-) -> bytes:
+) -> tuple[bytes, str, str]:
     bbox = isolated_rgba.getbbox()
     if bbox:
         isolated_rgba = isolated_rgba.crop(bbox)
@@ -103,9 +132,11 @@ def compose_final_jpg(
     if iw <= 0 or ih <= 0:
         raise ValueError("A imagem ficou vazia após a remoção de fundo.")
 
-    margin_px = int(output_size * (margin_percent / 100))
-    max_w = max(1, output_size - (margin_px * 2))
-    max_h = max(1, output_size - (margin_px * 2))
+    margin_x = int(output_width * (margin_percent / 100))
+    margin_y = int(output_height * (margin_percent / 100))
+
+    max_w = max(1, output_width - (margin_x * 2))
+    max_h = max(1, output_height - (margin_y * 2))
 
     fit_scale = min(max_w / iw, max_h / ih)
     new_w = max(1, int(iw * fit_scale))
@@ -113,16 +144,37 @@ def compose_final_jpg(
 
     resized = isolated_rgba.resize((new_w, new_h), Image.LANCZOS)
 
-    x = (output_size - new_w) // 2
-    y = (output_size - new_h) // 2
+    x = (output_width - new_w) // 2
+    y = (output_height - new_h) // 2
 
-    temp = Image.new("RGBA", (output_size, output_size), (255, 255, 255, 255))
-    temp.paste(resized, (x, y), resized)
+    if background_mode == "transparent" and output_format == "png":
+        canvas = Image.new("RGBA", (output_width, output_height), (255, 255, 255, 0))
+        canvas.paste(resized, (x, y), resized)
+
+        output = BytesIO()
+        canvas.save(output, format="PNG", optimize=True)
+        output.seek(0)
+        return output.read(), "png", "image/png"
+
+    canvas = Image.new("RGBA", (output_width, output_height), (255, 255, 255, 255))
+    canvas.paste(resized, (x, y), resized)
+
+    if output_format == "png":
+        output = BytesIO()
+        canvas.save(output, format="PNG", optimize=True)
+        output.seek(0)
+        return output.read(), "png", "image/png"
+
+    if output_format == "jpeg":
+        output = BytesIO()
+        canvas.convert("RGB").save(output, format="JPEG", quality=jpeg_quality, optimize=True)
+        output.seek(0)
+        return output.read(), "jpeg", "image/jpeg"
 
     output = BytesIO()
-    temp.convert("RGB").save(output, format="JPEG", quality=jpeg_quality, optimize=True)
+    canvas.convert("RGB").save(output, format="JPEG", quality=jpeg_quality, optimize=True)
     output.seek(0)
-    return output.read()
+    return output.read(), "jpg", "image/jpeg"
 
 
 def decode_data_url(data_url: str) -> bytes:
@@ -137,6 +189,10 @@ async def process_batch(
     files: list[UploadFile] = File(...),
     margin_percent: int = Form(DEFAULT_MARGIN_PERCENT),
     jpeg_quality: int = Form(DEFAULT_JPEG_QUALITY),
+    output_format: str = Form("jpg"),
+    background_mode: str = Form("white"),
+    output_width: int = Form(DEFAULT_OUTPUT_WIDTH),
+    output_height: int = Form(DEFAULT_OUTPUT_HEIGHT),
 ):
     try:
         if not files:
@@ -147,6 +203,13 @@ async def process_batch(
                 status_code=400,
                 content={"error": f"Envie no máximo {MAX_FILES_PER_BATCH} imagens por vez."},
             )
+
+        output_format, background_mode, output_width, output_height = normalize_output_options(
+            output_format=output_format,
+            background_mode=background_mode,
+            output_width=output_width,
+            output_height=output_height,
+        )
 
         batch_id = uuid.uuid4().hex[:12]
         batch_dir = BATCHES_DIR / batch_id
@@ -178,16 +241,19 @@ async def process_batch(
             mask_path = item_dir / f"{clean_name}_mask.png"
             alpha_mask.save(mask_path)
 
-            final_jpg = compose_final_jpg(
+            final_bytes, final_ext, media_type = compose_output_image(
                 isolated_rgba=isolated_rgba,
-                output_size=OUTPUT_SIZE,
+                output_width=output_width,
+                output_height=output_height,
                 margin_percent=margin_percent,
+                output_format=output_format,
+                background_mode=background_mode,
                 jpeg_quality=jpeg_quality,
             )
 
-            output_filename = f"{clean_name}_1000x1000.jpg"
+            output_filename = f"{clean_name}_{output_width}x{output_height}.{final_ext}"
             output_path = item_dir / output_filename
-            output_path.write_bytes(final_jpg)
+            output_path.write_bytes(final_bytes)
 
             processed_items.append(
                 {
@@ -199,6 +265,11 @@ async def process_batch(
                     "isolated_url": media_url(isolated_path),
                     "mask_url": media_url(mask_path),
                     "save_url": f"/api/save-edited/{batch_id}/{image_id}",
+                    "output_format": final_ext,
+                    "background_mode": background_mode,
+                    "output_width": output_width,
+                    "output_height": output_height,
+                    "media_type": media_type,
                 }
             )
 
@@ -212,6 +283,10 @@ async def process_batch(
             "batch_id": batch_id,
             "count": len(processed_items),
             "items": processed_items,
+            "output_format": output_format,
+            "background_mode": background_mode,
+            "output_width": output_width,
+            "output_height": output_height,
         }
         (batch_dir / "batch.json").write_text(
             json.dumps(meta, ensure_ascii=False, indent=2),
@@ -224,6 +299,10 @@ async def process_batch(
             "count": len(processed_items),
             "zip_url": f"/download/zip/{batch_id}",
             "items": processed_items,
+            "output_format": output_format,
+            "background_mode": background_mode,
+            "output_width": output_width,
+            "output_height": output_height,
         }
 
     except Exception as exc:
@@ -246,20 +325,28 @@ async def save_edited(batch_id: str, image_id: str, payload: SaveEditedPayload):
         if not item_dir.exists():
             raise HTTPException(status_code=404, detail="Imagem não encontrada.")
 
-        jpg_files = list(item_dir.glob("*.jpg"))
-        if not jpg_files:
-            raise HTTPException(status_code=404, detail="Arquivo JPG não encontrado.")
+        existing_files = list(item_dir.glob("*.jpg")) + list(item_dir.glob("*.jpeg")) + list(item_dir.glob("*.png"))
+        if not existing_files:
+            raise HTTPException(status_code=404, detail="Arquivo final não encontrado.")
 
-        file_path = jpg_files[0]
+        file_path = existing_files[0]
         raw = decode_data_url(payload.data_url)
+        ext = file_path.suffix.lower()
 
-        img = Image.open(BytesIO(raw)).convert("RGB")
-        img.save(file_path, format="JPEG", quality=95, optimize=True)
+        if ext == ".png":
+            img = Image.open(BytesIO(raw)).convert("RGBA")
+            img.save(file_path, format="PNG", optimize=True)
+            media_type = "image/png"
+        else:
+            img = Image.open(BytesIO(raw)).convert("RGB")
+            img.save(file_path, format="JPEG", quality=95, optimize=True)
+            media_type = "image/jpeg"
 
         return {
             "success": True,
             "preview_url": media_url(file_path),
             "download_url": f"/download/image/{batch_id}/{image_id}",
+            "media_type": media_type,
         }
 
     except Exception as exc:
@@ -281,14 +368,17 @@ def download_image(batch_id: str, image_id: str):
     if not item_dir.exists():
         raise HTTPException(status_code=404, detail="Imagem não encontrada.")
 
-    jpg_files = list(item_dir.glob("*.jpg"))
-    if not jpg_files:
-        raise HTTPException(status_code=404, detail="Arquivo JPG não encontrado.")
+    files = list(item_dir.glob("*.jpg")) + list(item_dir.glob("*.jpeg")) + list(item_dir.glob("*.png"))
+    if not files:
+        raise HTTPException(status_code=404, detail="Arquivo final não encontrado.")
 
-    file_path = jpg_files[0]
+    file_path = files[0]
+    ext = file_path.suffix.lower()
+    media_type = "image/png" if ext == ".png" else "image/jpeg"
+
     return FileResponse(
         path=file_path,
-        media_type="image/jpeg",
+        media_type=media_type,
         filename=file_path.name,
     )
 
@@ -302,11 +392,11 @@ def download_zip(batch_id: str):
     zip_path = batch_dir / f"photopeg-lote-{batch_id}.zip"
 
     with ZipFile(zip_path, "w", ZIP_DEFLATED) as zipf:
-        for item_dir in sorted(batch_dir.iterdir()):
-            if not item_dir.is_dir():
-                continue
-            for jpg in item_dir.glob("*.jpg"):
-                zipf.write(jpg, arcname=jpg.name)
+      for item_dir in sorted(batch_dir.iterdir()):
+          if not item_dir.is_dir():
+              continue
+          for final_file in list(item_dir.glob("*.jpg")) + list(item_dir.glob("*.jpeg")) + list(item_dir.glob("*.png")):
+              zipf.write(final_file, arcname=final_file.name)
 
     return FileResponse(
         path=zip_path,
