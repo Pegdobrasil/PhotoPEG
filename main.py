@@ -170,6 +170,7 @@ async def process_batch(
             item_dir.mkdir(parents=True, exist_ok=True)
 
             isolated_rgba = remove_background(raw)
+
             isolated_path = item_dir / f"{clean_name}_isolated.png"
             isolated_rgba.save(isolated_path)
 
