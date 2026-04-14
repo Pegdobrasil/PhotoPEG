@@ -40,6 +40,8 @@ const resetBtn = document.getElementById("resetBtn");
 const undoBtn = document.getElementById("undoBtn");
 const redoBtn = document.getElementById("redoBtn");
 const editorDownloadBtn = document.getElementById("editorDownloadBtn");
+const renameInEditorBtn = document.getElementById("renameInEditorBtn");
+const editorFileName = document.getElementById("editorFileName");
 
 const editorCanvas = document.getElementById("editorCanvas");
 const editorCtx = editorCanvas.getContext("2d");
@@ -55,6 +57,8 @@ const editorOutputHeight = document.getElementById("editorOutputHeight");
 
 const viewZoomRange = document.getElementById("viewZoomRange");
 const zoomRange = document.getElementById("zoomRange");
+const posXRange = document.getElementById("posXRange");
+const posYRange = document.getElementById("posYRange");
 const lightRange = document.getElementById("lightRange");
 const brightnessRange = document.getElementById("brightnessRange");
 const contrastRange = document.getElementById("contrastRange");
@@ -64,6 +68,8 @@ const brushRange = document.getElementById("brushRange");
 
 const viewZoomRangeValue = document.getElementById("viewZoomRangeValue");
 const zoomRangeValue = document.getElementById("zoomRangeValue");
+const posXRangeValue = document.getElementById("posXRangeValue");
+const posYRangeValue = document.getElementById("posYRangeValue");
 const lightRangeValue = document.getElementById("lightRangeValue");
 const brightnessRangeValue = document.getElementById("brightnessRangeValue");
 const contrastRangeValue = document.getElementById("contrastRangeValue");
@@ -115,6 +121,19 @@ function normalizeDimension(value, fallback = 1000) {
   const n = Number(value);
   if (!Number.isFinite(n)) return fallback;
   return Math.max(100, Math.min(5000, Math.round(n)));
+}
+
+function sanitizeFileBaseName(name) {
+  const clean = (name || "")
+    .replace(/\.[a-zA-Z0-9]+$/, "")
+    .replace(/[^a-zA-Z0-9\-_ ]+/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/^[-_ ]+|[-_ ]+$/g, "");
+  return clean || "imagem";
+}
+
+function fileBaseFromDisplayName(name) {
+  return String(name || "").replace(/\.[a-zA-Z0-9]+$/, "");
 }
 
 function syncFormatAndBackground(formatEl, backgroundEl) {
@@ -224,9 +243,7 @@ function finishLoadingSuccess() {
     if (status) status.textContent = "concluído";
   });
 
-  setTimeout(() => {
-    hideLoading();
-  }, 700);
+  setTimeout(() => hideLoading(), 700);
 }
 
 function finishLoadingError(message) {
@@ -235,9 +252,7 @@ function finishLoadingError(message) {
     loadingSimulationTimer = null;
   }
   loadingSubtitle.textContent = message || "Ocorreu uma falha durante o processamento.";
-  setTimeout(() => {
-    hideLoading();
-  }, 900);
+  setTimeout(() => hideLoading(), 900);
 }
 
 function setIntroStep(stepNumber, label) {
@@ -311,11 +326,9 @@ function xhrPostJson(url, formData, onUploadProgress) {
     };
 
     xhr.onload = () => {
-      const text = xhr.responseText;
-      let data = null;
-
+      let data;
       try {
-        data = JSON.parse(text);
+        data = JSON.parse(xhr.responseText);
       } catch {
         reject(new Error("Resposta inválida do servidor."));
         return;
@@ -328,10 +341,7 @@ function xhrPostJson(url, formData, onUploadProgress) {
       }
     };
 
-    xhr.onerror = () => {
-      reject(new Error("Falha de comunicação com o servidor."));
-    };
-
+    xhr.onerror = () => reject(new Error("Falha de comunicação com o servidor."));
     xhr.send(formData);
   });
 }
@@ -361,17 +371,21 @@ function updateFileName() {
     fileName.textContent = "Nenhum ficheiro selecionado";
     return;
   }
-
-  if (count === 1) {
-    fileName.textContent = filesInput.files[0].name;
-    return;
-  }
-
-  fileName.textContent = `${count} ficheiros selecionados`;
+  fileName.textContent = count === 1 ? filesInput.files[0].name : `${count} ficheiros selecionados`;
 }
 
 function cacheBust(url) {
   return `${url}${url.includes("?") ? "&" : "?"}v=${Date.now()}`;
+}
+
+async function renameItem(item, newName) {
+  const cleanName = sanitizeFileBaseName(newName);
+  const data = await postJson(item.rename_url, { new_name: cleanName });
+  item.display_name = data.display_name;
+  item.output_filename = data.output_filename;
+  item.preview_url = data.preview_url;
+  item.download_url = data.download_url;
+  return item;
 }
 
 function renderGallery(items) {
@@ -385,19 +399,43 @@ function renderGallery(items) {
     const outputLabel = `${item.output_format.toUpperCase()} • ${item.output_width}x${item.output_height} • ${item.background_mode === "transparent" ? "Transparente" : "Branco"}`;
 
     card.innerHTML = `
-      <div class="gallery-name">${item.filename}</div>
+      <div class="gallery-name">${item.display_name || item.output_filename}</div>
       <div class="gallery-meta">${outputLabel}</div>
+
+      <div class="gallery-rename">
+        <input type="text" class="rename-input" value="${fileBaseFromDisplayName(item.display_name || item.output_filename)}">
+        <button class="btn btn-secondary rename-btn" type="button">Renomear</button>
+      </div>
+
       <div class="gallery-preview ${transparentClass}">
         <img src="${cacheBust(item.preview_url)}" alt="${item.filename}" loading="lazy">
       </div>
+
       <div class="result-actions">
         <button class="btn btn-primary open-editor-btn" type="button">Editar</button>
-        <a class="btn btn-success" href="${item.download_url}" target="_blank" rel="noopener noreferrer">Baixar arquivo</a>
+        <a class="btn btn-success download-link" href="${item.download_url}" target="_blank" rel="noopener noreferrer">Baixar arquivo</a>
       </div>
     `;
 
     card.querySelector(".gallery-preview").addEventListener("click", () => openEditor(item));
     card.querySelector(".open-editor-btn").addEventListener("click", () => openEditor(item));
+
+    const renameInput = card.querySelector(".rename-input");
+    const renameBtn = card.querySelector(".rename-btn");
+
+    renameBtn.addEventListener("click", async () => {
+      try {
+        renameBtn.disabled = true;
+        setStatus("Renomeando arquivo...");
+        await renameItem(item, renameInput.value);
+        renderGallery(window.__photopeg_items);
+        setStatus("Arquivo renomeado com sucesso.");
+      } catch (error) {
+        setStatus(error.message || "Falha ao renomear o arquivo.");
+      } finally {
+        renameBtn.disabled = false;
+      }
+    });
 
     galleryGrid.appendChild(card);
   });
@@ -439,6 +477,8 @@ function getEditorOutputSettings() {
 function updateSliderLabels() {
   viewZoomRangeValue.textContent = `${viewZoomRange.value}%`;
   zoomRangeValue.textContent = `${zoomRange.value}%`;
+  posXRangeValue.textContent = posXRange.value;
+  posYRangeValue.textContent = posYRange.value;
   lightRangeValue.textContent = lightRange.value;
   brightnessRangeValue.textContent = brightnessRange.value;
   contrastRangeValue.textContent = contrastRange.value;
@@ -450,6 +490,8 @@ function updateSliderLabels() {
 function resetEditorControls() {
   viewZoomRange.value = 58;
   zoomRange.value = 100;
+  posXRange.value = 0;
+  posYRange.value = 0;
   lightRange.value = 0;
   brightnessRange.value = 0;
   contrastRange.value = 0;
@@ -472,6 +514,8 @@ function saveHistory() {
     retouch: retouchCtx.getImageData(0, 0, editorState.retouchCanvas.width, editorState.retouchCanvas.height),
     controls: {
       zoom: Number(zoomRange.value),
+      posX: Number(posXRange.value),
+      posY: Number(posYRange.value),
       light: Number(lightRange.value),
       brightness: Number(brightnessRange.value),
       contrast: Number(contrastRange.value),
@@ -501,6 +545,8 @@ function restoreHistory(index) {
   retouchCtx.putImageData(snapshot.retouch, 0, 0);
 
   zoomRange.value = snapshot.controls.zoom;
+  posXRange.value = snapshot.controls.posX;
+  posYRange.value = snapshot.controls.posY;
   lightRange.value = snapshot.controls.light;
   brightnessRange.value = snapshot.controls.brightness;
   contrastRange.value = snapshot.controls.contrast;
@@ -627,8 +673,12 @@ function renderBaseFromMask() {
   const zoomFactor = Number(zoomRange.value) / 100;
   const drawW = Math.max(1, Math.round(bbox.w * fitScale * zoomFactor));
   const drawH = Math.max(1, Math.round(bbox.h * fitScale * zoomFactor));
-  const drawX = Math.round((outputW - drawW) / 2);
-  const drawY = Math.round((outputH - drawH) / 2);
+
+  const moveX = Number(posXRange.value);
+  const moveY = Number(posYRange.value);
+
+  const drawX = Math.round((outputW - drawW) / 2 + moveX);
+  const drawY = Math.round((outputH - drawH) / 2 + moveY);
 
   baseCtx.drawImage(cropCanvas, drawX, drawY, drawW, drawH);
   applyAdjustments(baseCtx, outputW, outputH);
@@ -775,8 +825,9 @@ function cloneStamp(fromX, fromY, toX, toY) {
 
 function openEditor(item) {
   editorState.item = item;
-  editorTitle.textContent = `Editor — ${item.filename}`;
+  editorTitle.textContent = `Editor — ${item.display_name || item.output_filename}`;
   editorDownloadBtn.href = item.download_url;
+  editorFileName.value = fileBaseFromDisplayName(item.display_name || item.output_filename);
 
   editorOutputFormat.value = item.output_format || "jpg";
   editorBackgroundMode.value = item.background_mode || "white";
@@ -873,6 +924,23 @@ async function saveEditor() {
     setStatus(error.message || "Falha ao salvar a imagem editada.");
   } finally {
     saveBtn.disabled = false;
+  }
+}
+
+async function renameCurrentEditorItem() {
+  if (!editorState.item) return;
+  try {
+    renameInEditorBtn.disabled = true;
+    setStatus("Renomeando arquivo...");
+    await renameItem(editorState.item, editorFileName.value);
+    editorTitle.textContent = `Editor — ${editorState.item.display_name || editorState.item.output_filename}`;
+    editorDownloadBtn.href = editorState.item.download_url;
+    renderGallery(window.__photopeg_items);
+    setStatus("Arquivo renomeado com sucesso.");
+  } catch (error) {
+    setStatus(error.message || "Falha ao renomear o arquivo.");
+  } finally {
+    renameInEditorBtn.disabled = false;
   }
 }
 
@@ -1079,7 +1147,17 @@ viewZoomRange.addEventListener("input", () => {
   applyViewZoom();
 });
 
-[zoomRange, lightRange, brightnessRange, contrastRange, temperatureRange, sharpnessRange, brushRange].forEach((input) => {
+[
+  zoomRange,
+  posXRange,
+  posYRange,
+  lightRange,
+  brightnessRange,
+  contrastRange,
+  temperatureRange,
+  sharpnessRange,
+  brushRange,
+].forEach((input) => {
   input.addEventListener("input", () => {
     updateSliderLabels();
     if (editorState.item) {
@@ -1106,6 +1184,7 @@ window.addEventListener("mouseup", handleEditorPointerUp);
 closeEditorBtn.addEventListener("click", closeEditor);
 resetBtn.addEventListener("click", resetEditor);
 saveBtn.addEventListener("click", saveEditor);
+renameInEditorBtn.addEventListener("click", renameCurrentEditorItem);
 
 undoBtn.addEventListener("click", () => {
   if (editorState.historyIndex > 0) {
