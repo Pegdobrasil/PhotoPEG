@@ -5,14 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PhotoPEG Studio</title>
 
-  <link rel="icon" href="/static/favicon-32x32.png?v=7" sizes="32x32" type="image/png">
-  <link rel="shortcut icon" href="/static/favicon-32x32.png?v=7" type="image/png">
-  <link rel="apple-touch-icon" href="/static/favicon-32x32.png?v=7">
+  <link rel="icon" href="/static/favicon-32x32.png?v=9" sizes="32x32" type="image/png">
+  <link rel="shortcut icon" href="/static/favicon-32x32.png?v=9" type="image/png">
+  <link rel="apple-touch-icon" href="/static/favicon-32x32.png?v=9">
 
   <style>
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
 
     :root {
       --bg: #07111f;
@@ -24,6 +22,7 @@
       --blue-1: #2e6cff;
       --blue-2: #4d89ff;
       --blue-3: #7ab6ff;
+      --green: #18b36c;
       --shadow: 0 18px 50px rgba(0, 0, 0, 0.32);
       --radius-xl: 26px;
       --radius-lg: 20px;
@@ -125,8 +124,8 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      min-width: 260px;
-      min-height: 58px;
+      min-width: 280px;
+      min-height: 60px;
       border-radius: 16px;
       border: 1px solid var(--line-strong);
       background: linear-gradient(135deg, var(--blue-1), var(--blue-2), var(--blue-3));
@@ -165,6 +164,21 @@
       word-break: break-word;
     }
 
+    .info-list {
+      display: grid;
+      gap: 8px;
+      width: 100%;
+      max-width: 620px;
+      padding: 14px 16px;
+      border-radius: 16px;
+      border: 1px solid rgba(130, 166, 255, 0.12);
+      background: rgba(255,255,255,0.03);
+      text-align: left;
+      color: #dce7ff;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
     .actions {
       display: flex;
       justify-content: center;
@@ -187,6 +201,12 @@
       transform: translateY(-1px);
     }
 
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
     .btn-primary {
       color: #fff;
       background: linear-gradient(135deg, var(--blue-1), var(--blue-2), var(--blue-3));
@@ -199,6 +219,11 @@
       border: 1px solid rgba(255,255,255,0.08);
     }
 
+    .btn-success {
+      color: #fff;
+      background: linear-gradient(135deg, #13975d, var(--green));
+    }
+
     .status-box {
       border: 1px solid rgba(130, 166, 255, 0.12);
       border-radius: 16px;
@@ -209,8 +234,35 @@
       white-space: pre-line;
     }
 
-    .hidden-workspace {
+    .result-box {
       display: none;
+      border: 1px solid rgba(130, 166, 255, 0.12);
+      border-radius: 18px;
+      background: rgba(255,255,255,0.03);
+      padding: 18px;
+      gap: 14px;
+    }
+
+    .result-box.active {
+      display: grid;
+    }
+
+    .result-title {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 800;
+    }
+
+    .result-subtitle {
+      margin: 0;
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    .result-actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
     }
 
     .loading-overlay {
@@ -341,7 +393,8 @@
         min-width: 100%;
       }
 
-      .actions {
+      .actions,
+      .result-actions {
         flex-direction: column;
       }
 
@@ -363,14 +416,14 @@
           />
           <div class="brand-text">
             <h1>PhotoPEG Studio</h1>
-            <p>Upload rápido para edição em lote</p>
+            <p>Lote em JPG com fundo branco e 1000x1000</p>
           </div>
         </div>
 
         <form id="uploadForm" class="upload-box">
           <h2 class="upload-title">Escolha os ficheiros</h2>
           <p class="upload-subtitle">
-            Selecione suas imagens para iniciar o processamento.
+            Selecione até 50 imagens para processar em lote.
           </p>
 
           <label class="file-picker">
@@ -388,6 +441,13 @@
 
           <div id="fileName" class="file-name">Nenhum ficheiro selecionado</div>
 
+          <div class="info-list">
+            <div>• Saída final em JPG</div>
+            <div>• Fundo branco digital</div>
+            <div>• Tamanho final 1000x1000 px</div>
+            <div>• Limite de até 50 imagens por lote</div>
+          </div>
+
           <div class="actions">
             <button id="submitBtn" class="btn btn-primary" type="submit">Processar lote</button>
             <button id="clearBtn" class="btn btn-secondary" type="button">Limpar</button>
@@ -396,7 +456,13 @@
 
         <div class="status-box" id="status">Aguardando envio das imagens.</div>
 
-        <div id="workspace" class="hidden-workspace"></div>
+        <div id="resultBox" class="result-box">
+          <h3 class="result-title">Lote processado</h3>
+          <p class="result-subtitle" id="resultText">Seu lote foi concluído com sucesso.</p>
+          <div class="result-actions">
+            <a id="zipDownloadBtn" class="btn btn-success" href="#" target="_blank" rel="noopener noreferrer">Baixar ZIP</a>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -429,17 +495,17 @@
           <span class="loading-step-status">aguardando</span>
         </div>
         <div class="loading-step" data-step="4">
-          <div class="loading-step-left"><span class="loading-step-dot"></span><span>Gerando arquivos</span></div>
+          <div class="loading-step-left"><span class="loading-step-dot"></span><span>Gerando JPG 1000x1000</span></div>
           <span class="loading-step-status">aguardando</span>
         </div>
         <div class="loading-step" data-step="5">
-          <div class="loading-step-left"><span class="loading-step-dot"></span><span>Finalizando</span></div>
+          <div class="loading-step-left"><span class="loading-step-dot"></span><span>Finalizando ZIP</span></div>
           <span class="loading-step-status">aguardando</span>
         </div>
       </div>
     </div>
   </div>
 
-  <script src="/static/app.js?v=8"></script>
+  <script src="/static/app.js?v=9"></script>
 </body>
 </html>
