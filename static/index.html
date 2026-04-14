@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PhotoPEG Studio</title>
 
-  <link rel="icon" href="/static/favicon-32x32.png?v=10" sizes="32x32" type="image/png">
-  <link rel="shortcut icon" href="/static/favicon-32x32.png?v=10" type="image/png">
-  <link rel="apple-touch-icon" href="/static/favicon-32x32.png?v=10">
+  <link rel="icon" href="/static/favicon-32x32.png?v=11" sizes="32x32" type="image/png">
+  <link rel="shortcut icon" href="/static/favicon-32x32.png?v=11" type="image/png">
+  <link rel="apple-touch-icon" href="/static/favicon-32x32.png?v=11">
 
   <style>
     * { box-sizing: border-box; }
@@ -26,7 +26,6 @@
       --neon: 0 0 0 1px rgba(122,182,255,0.45), 0 0 18px rgba(77,137,255,0.22);
       --radius-xl: 26px;
       --radius-lg: 20px;
-      --radius-md: 16px;
       --transition: 0.22s ease;
     }
 
@@ -102,7 +101,8 @@
 
     .upload-box,
     .status-box,
-    .result-box {
+    .result-box,
+    .gallery-box {
       border: 1px solid var(--line);
       border-radius: var(--radius-lg);
       background: linear-gradient(180deg, rgba(16, 31, 54, 0.86), rgba(11, 21, 37, 0.86));
@@ -112,6 +112,7 @@
     .upload-box:hover,
     .status-box:hover,
     .result-box:hover,
+    .gallery-box:hover,
     .gallery-card:hover {
       border-color: var(--line-strong);
       box-shadow: var(--neon);
@@ -123,6 +124,26 @@
       gap: 18px;
       justify-items: center;
       text-align: center;
+    }
+
+    .drop-zone {
+      width: 100%;
+      max-width: 720px;
+      border: 1px dashed rgba(122,182,255,0.35);
+      border-radius: 18px;
+      padding: 26px 18px;
+      background: rgba(255,255,255,0.03);
+      transition: var(--transition);
+      display: grid;
+      gap: 14px;
+      justify-items: center;
+    }
+
+    .drop-zone.dragover {
+      border-color: rgba(122,182,255,0.7);
+      box-shadow: var(--neon);
+      background: rgba(122,182,255,0.06);
+      transform: translateY(-1px);
     }
 
     .upload-title {
@@ -175,6 +196,11 @@
     .file-icon {
       font-size: 20px;
       line-height: 1;
+    }
+
+    .drop-hint {
+      font-size: 13px;
+      color: var(--muted);
     }
 
     .file-name {
@@ -300,20 +326,11 @@
 
     .gallery-box {
       display: none;
-      border: 1px solid var(--line);
-      border-radius: var(--radius-lg);
-      background: linear-gradient(180deg, rgba(16, 31, 54, 0.86), rgba(11, 21, 37, 0.86));
       padding: 18px;
-      transition: var(--transition);
     }
 
     .gallery-box.active {
       display: block;
-    }
-
-    .gallery-box:hover {
-      border-color: var(--line-strong);
-      box-shadow: var(--neon);
     }
 
     .gallery-title {
@@ -534,23 +551,27 @@
         </div>
 
         <form id="uploadForm" class="upload-box">
-          <h2 class="upload-title">Escolha os ficheiros</h2>
-          <p class="upload-subtitle">
-            Selecione até 50 imagens para processar em lote.
-          </p>
+          <div class="drop-zone" id="dropZone">
+            <h2 class="upload-title">Escolha os ficheiros</h2>
+            <p class="upload-subtitle">
+              Selecione ou arraste até 50 imagens para processar em lote.
+            </p>
 
-          <label class="file-picker">
-            <span class="file-icon">📁</span>
-            <span>Escolher ficheiros</span>
-            <input
-              id="files"
-              type="file"
-              name="files"
-              accept=".jpg,.jpeg,.png,.webp"
-              multiple
-              required
-            />
-          </label>
+            <label class="file-picker">
+              <span class="file-icon">📁</span>
+              <span>Escolher ficheiros</span>
+              <input
+                id="files"
+                type="file"
+                name="files"
+                accept=".jpg,.jpeg,.png,.webp"
+                multiple
+                required
+              />
+            </label>
+
+            <div class="drop-hint">Arraste e solte as imagens aqui</div>
+          </div>
 
           <div id="fileName" class="file-name">Nenhum ficheiro selecionado</div>
 
@@ -625,6 +646,6 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=10"></script>
+  <script src="/static/app.js?v=11"></script>
 </body>
 </html>
