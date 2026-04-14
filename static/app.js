@@ -5,6 +5,8 @@ const statusBox = document.getElementById("status");
 const submitBtn = document.getElementById("submitBtn");
 const clearBtn = document.getElementById("clearBtn");
 
+const dropZone = document.getElementById("dropZone");
+
 const resultBox = document.getElementById("resultBox");
 const resultText = document.getElementById("resultText");
 const zipDownloadBtn = document.getElementById("zipDownloadBtn");
@@ -191,7 +193,7 @@ function renderGallery(items) {
     card.innerHTML = `
       <div class="gallery-name">${item.filename}</div>
       <div class="gallery-preview">
-        <img src="${item.preview_url}" alt="${item.filename}">
+        <img src="${item.preview_url}" alt="${item.filename}" loading="lazy">
       </div>
       <a class="btn btn-success" href="${item.download_url}" target="_blank" rel="noopener noreferrer">Baixar JPG</a>
     `;
@@ -202,7 +204,7 @@ function renderGallery(items) {
   galleryBox.classList.add("active");
 }
 
-filesInput.addEventListener("change", () => {
+function updateFileName() {
   const count = filesInput.files.length;
   if (!count) {
     fileName.textContent = "Nenhum ficheiro selecionado";
@@ -215,13 +217,39 @@ filesInput.addEventListener("change", () => {
   }
 
   fileName.textContent = `${count} ficheiros selecionados`;
-});
+}
+
+filesInput.addEventListener("change", updateFileName);
 
 clearBtn.addEventListener("click", () => {
   filesInput.value = "";
   fileName.textContent = "Nenhum ficheiro selecionado";
   setStatus("Aguardando envio das imagens.");
   resetResult();
+});
+
+["dragenter", "dragover"].forEach((eventName) => {
+  dropZone.addEventListener(eventName, (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    dropZone.classList.add("dragover");
+  });
+});
+
+["dragleave", "drop"].forEach((eventName) => {
+  dropZone.addEventListener(eventName, (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    dropZone.classList.remove("dragover");
+  });
+});
+
+dropZone.addEventListener("drop", (event) => {
+  const files = event.dataTransfer?.files;
+  if (!files || !files.length) return;
+
+  filesInput.files = files;
+  updateFileName();
 });
 
 form.addEventListener("submit", async (event) => {
