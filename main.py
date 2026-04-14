@@ -176,15 +176,12 @@ def compose_output_image(
         output.seek(0)
         return output.read(), "png", "image/png"
 
-    if output_format == "jpeg":
-        output = BytesIO()
-        canvas.convert("RGB").save(output, format="JPEG", quality=jpeg_quality, optimize=True)
-        output.seek(0)
-        return output.read(), "jpeg", "image/jpeg"
-
     output = BytesIO()
     canvas.convert("RGB").save(output, format="JPEG", quality=jpeg_quality, optimize=True)
     output.seek(0)
+
+    if output_format == "jpeg":
+        return output.read(), "jpeg", "image/jpeg"
     return output.read(), "jpg", "image/jpeg"
 
 
