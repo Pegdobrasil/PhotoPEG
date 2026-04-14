@@ -5,6 +5,10 @@ const statusBox = document.getElementById("status");
 const submitBtn = document.getElementById("submitBtn");
 const clearBtn = document.getElementById("clearBtn");
 
+const resultBox = document.getElementById("resultBox");
+const resultText = document.getElementById("resultText");
+const zipDownloadBtn = document.getElementById("zipDownloadBtn");
+
 const loadingOverlay = document.getElementById("loadingOverlay");
 const loadingSubtitle = document.getElementById("loadingSubtitle");
 const loadingCurrentStep = document.getElementById("loadingCurrentStep");
@@ -76,8 +80,8 @@ function startLoadingSimulation(fileCount) {
     { progress: 8, step: 1, label: "Separando arquivos..." },
     { progress: 24, step: 2, label: "Enviando ao servidor..." },
     { progress: 58, step: 3, label: `Removendo fundo em ${fileCount} imagem(ns)...` },
-    { progress: 82, step: 4, label: "Gerando arquivos..." },
-    { progress: 96, step: 5, label: "Finalizando..." },
+    { progress: 82, step: 4, label: "Gerando JPG 1000x1000..." },
+    { progress: 96, step: 5, label: "Finalizando ZIP..." },
   ];
 
   let stageIndex = 0;
@@ -167,6 +171,11 @@ function xhrPostJson(url, formData, onUploadProgress) {
   });
 }
 
+function resetResult() {
+  resultBox.classList.remove("active");
+  zipDownloadBtn.href = "#";
+}
+
 filesInput.addEventListener("change", () => {
   const count = filesInput.files.length;
   if (!count) {
@@ -186,6 +195,7 @@ clearBtn.addEventListener("click", () => {
   filesInput.value = "";
   fileName.textContent = "Nenhum ficheiro selecionado";
   setStatus("Aguardando envio das imagens.");
+  resetResult();
 });
 
 form.addEventListener("submit", async (event) => {
@@ -206,23 +216,25 @@ form.addEventListener("submit", async (event) => {
 
   formData.append("margin_percent", "8");
   formData.append("jpeg_quality", "95");
-  formData.append("zoom_percent", "100");
-  formData.append("offset_x", "0");
-  formData.append("offset_y", "0");
 
   submitBtn.disabled = true;
+  resetResult();
   setStatus("Processando lote... aguarde.");
   startLoadingSimulation(filesInput.files.length);
 
   try {
-    const data = await xhrPostJson("/api/process-preview", formData, (uploadPercent) => {
+    const data = await xhrPostJson("/api/process-batch", formData, (uploadPercent) => {
       const mapped = 8 + Math.round(uploadPercent * 0.16);
       setLoadingProgress(Math.min(mapped, 24), "Enviando ao servidor...");
       setLoadingStep(2, "enviando");
     });
 
     finishLoadingSuccess();
-    setStatus(`Concluído.\nImagens processadas: ${data.items.length}\nLote enviado com sucesso.`);
+    setStatus(`Concluído.\nImagens processadas: ${data.count}\nFormato final: JPG\nFundo: branco\nTamanho: 1000x1000 px`);
+
+    resultText.textContent = `Lote concluído com ${data.count} imagem(ns).`;
+    zipDownloadBtn.href = data.zip_url;
+    resultBox.classList.add("active");
   } catch (error) {
     finishLoadingError(error.message);
     setStatus(error.message || "Falha ao processar o lote.");
