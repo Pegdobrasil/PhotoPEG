@@ -40,7 +40,10 @@ bg_session = None
 def home():
     index_path = STATIC_DIR / "index.html"
     if not index_path.exists():
-        return HTMLResponse("<h1>Arquivo static/index.html não encontrado.</h1>", status_code=500)
+        return HTMLResponse(
+            "<h1>Arquivo static/index.html não encontrado.</h1>",
+            status_code=500,
+        )
     return index_path.read_text(encoding="utf-8")
 
 
@@ -88,8 +91,6 @@ def compose_final_jpg(
     iw, ih = isolated_rgba.size
     if iw <= 0 or ih <= 0:
         raise ValueError("A imagem ficou vazia após a remoção de fundo.")
-
-    canvas = Image.new("RGB", (output_size, output_size), (255, 255, 255))
 
     margin_px = int(output_size * (margin_percent / 100))
     max_w = max(1, output_size - (margin_px * 2))
@@ -169,6 +170,7 @@ async def process_batch(
                     "image_id": image_id,
                     "filename": file.filename,
                     "output_filename": output_filename,
+                    "preview_url": f"/download/image/{batch_id}/{image_id}",
                     "download_url": f"/download/image/{batch_id}/{image_id}",
                 }
             )
