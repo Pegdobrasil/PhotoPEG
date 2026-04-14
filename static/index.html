@@ -3,665 +3,214 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PhotoPEG Editor</title>
+  <title>PhotoPEG Studio</title>
 
-  <link rel="icon" href="/static/favicon-32x32.png?v=6" sizes="32x32" type="image/png">
-  <link rel="shortcut icon" href="/static/favicon-32x32.png?v=6" type="image/png">
-  <link rel="apple-touch-icon" href="/static/favicon-32x32.png?v=6">
+  <link rel="icon" href="/static/favicon-32x32.png?v=7" sizes="32x32" type="image/png">
+  <link rel="shortcut icon" href="/static/favicon-32x32.png?v=7" type="image/png">
+  <link rel="apple-touch-icon" href="/static/favicon-32x32.png?v=7">
 
   <style>
-    * { box-sizing: border-box; }
+    * {
+      box-sizing: border-box;
+    }
 
     :root {
-      --bg-main: #07111f;
-      --bg-soft: #0d1a2d;
-      --panel: #101f36;
-      --card: #142640;
-      --card-2: #182d4b;
-      --line: rgba(132, 164, 255, 0.14);
-      --line-strong: rgba(132, 164, 255, 0.34);
-      --text: #f5f8ff;
-      --muted: #a8b8d8;
+      --bg: #07111f;
+      --bg-soft: #0c182b;
+      --line: rgba(130, 166, 255, 0.14);
+      --line-strong: rgba(130, 166, 255, 0.28);
+      --text: #f3f7ff;
+      --muted: #9eb1d3;
       --blue-1: #2e6cff;
       --blue-2: #4d89ff;
-      --blue-3: #76b4ff;
-      --green: #18b36c;
-      --danger: #ff5f7a;
-      --warning: #f0b429;
-      --shadow: 0 18px 45px rgba(0, 0, 0, 0.28);
-      --radius-xl: 22px;
-      --radius-lg: 18px;
-      --radius-md: 14px;
-      --radius-sm: 12px;
+      --blue-3: #7ab6ff;
+      --shadow: 0 18px 50px rgba(0, 0, 0, 0.32);
+      --radius-xl: 26px;
+      --radius-lg: 20px;
+      --radius-md: 16px;
       --transition: 0.22s ease;
     }
 
     body {
       margin: 0;
+      min-height: 100vh;
       font-family: Arial, Helvetica, sans-serif;
       color: var(--text);
       background:
-        radial-gradient(circle at top left, rgba(56, 120, 255, 0.14), transparent 26%),
-        radial-gradient(circle at top right, rgba(78, 180, 255, 0.1), transparent 22%),
-        linear-gradient(180deg, #05101d 0%, #07111f 38%, #08111d 100%);
-      min-height: 100vh;
-    }
-
-    .wrap {
-      max-width: 1680px;
-      margin: 0 auto;
-      padding: 20px 16px 28px;
-    }
-
-    .topbar {
+        radial-gradient(circle at top left, rgba(54, 115, 255, 0.16), transparent 25%),
+        radial-gradient(circle at top right, rgba(80, 184, 255, 0.10), transparent 20%),
+        linear-gradient(180deg, #050d18 0%, #07111f 45%, #08111c 100%);
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      margin-bottom: 16px;
-      padding: 14px 18px;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .shell {
+      width: 100%;
+      max-width: 980px;
+    }
+
+    .card {
       border: 1px solid var(--line);
-      border-radius: 18px;
-      background: rgba(10, 19, 33, 0.9);
+      border-radius: var(--radius-xl);
+      background: linear-gradient(180deg, rgba(10, 20, 36, 0.96), rgba(8, 16, 29, 0.96));
       box-shadow: var(--shadow);
-      backdrop-filter: blur(10px);
+      overflow: hidden;
+    }
+
+    .card-inner {
+      padding: 42px 34px;
+      display: grid;
+      gap: 28px;
     }
 
     .brand {
       display: flex;
       align-items: center;
-      gap: 14px;
+      gap: 18px;
+      justify-content: center;
+      text-align: left;
+      flex-wrap: wrap;
     }
 
     .brand-logo {
-      width: 150px;
+      width: 170px;
       max-width: 100%;
       height: auto;
       display: block;
     }
 
-    .brand-title {
+    .brand-text h1 {
       margin: 0;
-      font-size: 24px;
-      font-weight: 800;
-      letter-spacing: -0.02em;
-    }
-
-    .brand-subtitle {
-      margin: 4px 0 0;
-      font-size: 13px;
-      color: var(--muted);
-    }
-
-    .topbar-right {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-
-    .chip {
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      padding: 10px 14px;
-      background: rgba(255,255,255,0.03);
-      color: #dce7ff;
-      font-size: 12px;
-      font-weight: 700;
-    }
-
-    .main-panel {
-      border: 1px solid var(--line);
-      border-radius: var(--radius-xl);
-      background: linear-gradient(180deg, rgba(10, 19, 33, 0.96), rgba(8, 16, 29, 0.96));
-      box-shadow: var(--shadow);
-      overflow: hidden;
-    }
-
-    .hero {
-      padding: 20px 22px 12px;
-      border-bottom: 1px solid rgba(255,255,255,0.05);
-    }
-
-    .hero h1 {
-      margin: 0 0 8px;
-      font-size: 30px;
+      font-size: 44px;
+      line-height: 1;
       font-weight: 800;
       letter-spacing: -0.03em;
     }
 
-    .hero p {
-      margin: 0;
+    .brand-text p {
+      margin: 10px 0 0;
+      font-size: 18px;
       color: var(--muted);
-      line-height: 1.5;
-      max-width: 980px;
-      font-size: 14px;
     }
 
-    .panel-body {
-      padding: 18px 22px 22px;
-    }
-
-    .upload-card {
+    .upload-box {
       border: 1px solid var(--line);
-      border-radius: 20px;
-      padding: 18px;
-      background: linear-gradient(180deg, rgba(15, 28, 46, 0.85), rgba(10, 20, 34, 0.85));
-      margin-bottom: 16px;
-    }
-
-    .upload-head {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 14px;
-      flex-wrap: wrap;
+      border-radius: var(--radius-lg);
+      background: linear-gradient(180deg, rgba(16, 31, 54, 0.86), rgba(11, 21, 37, 0.86));
+      padding: 28px;
+      display: grid;
+      gap: 18px;
+      justify-items: center;
+      text-align: center;
     }
 
     .upload-title {
-      font-size: 20px;
+      font-size: 24px;
       font-weight: 800;
-      margin: 0 0 6px;
-    }
-
-    .upload-description {
       margin: 0;
-      font-size: 13px;
+    }
+
+    .upload-subtitle {
+      margin: 0;
       color: var(--muted);
-      line-height: 1.45;
+      font-size: 14px;
+      line-height: 1.5;
+      max-width: 620px;
     }
 
-    .file-input {
-      width: 100%;
-      border-radius: 14px;
-      border: 1px solid rgba(255,255,255,0.08);
-      background: rgba(4, 10, 19, 0.9);
-      color: #fff;
-      padding: 14px;
-      outline: none;
-      margin-bottom: 14px;
-    }
-
-    .toolbar-top {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      margin-top: 10px;
-    }
-
-    .settings-grid {
-      display: grid;
-      grid-template-columns: repeat(5, minmax(0, 1fr));
-      gap: 12px;
-      margin-top: 14px;
-    }
-
-    .field {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .field label {
-      font-size: 12px;
-      font-weight: 700;
-      color: #dce7ff;
-    }
-
-    .slider-wrap {
-      border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 14px;
-      padding: 10px 12px;
-      background: rgba(255,255,255,0.03);
-    }
-
-    .slider-head {
-      display: flex;
+    .file-picker {
+      position: relative;
+      display: inline-flex;
       align-items: center;
-      justify-content: space-between;
+      justify-content: center;
+      min-width: 260px;
+      min-height: 58px;
+      border-radius: 16px;
+      border: 1px solid var(--line-strong);
+      background: linear-gradient(135deg, var(--blue-1), var(--blue-2), var(--blue-3));
+      color: #fff;
+      font-size: 16px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: var(--transition);
+      box-shadow: 0 10px 28px rgba(46, 108, 255, 0.22);
       gap: 10px;
-      margin-bottom: 8px;
-      font-size: 11px;
-      color: var(--muted);
+      padding: 0 24px;
     }
 
-    .slider-value {
-      min-width: 52px;
-      text-align: right;
-      font-size: 12px;
-      font-weight: 700;
-      color: #eaf1ff;
+    .file-picker:hover {
+      transform: translateY(-2px);
+      filter: brightness(1.04);
     }
 
-    input[type="range"] {
-      width: 100%;
-      appearance: none;
-      background: transparent;
+    .file-picker input {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
       cursor: pointer;
     }
 
-    input[type="range"]::-webkit-slider-runnable-track {
-      height: 6px;
-      border-radius: 999px;
-      background: linear-gradient(90deg, var(--blue-1), var(--blue-2), var(--blue-3));
+    .file-icon {
+      font-size: 20px;
+      line-height: 1;
     }
 
-    input[type="range"]::-webkit-slider-thumb {
-      appearance: none;
-      width: 18px;
-      height: 18px;
-      border-radius: 50%;
-      background: #fff;
-      border: 3px solid var(--blue-2);
-      margin-top: -6px;
-      box-shadow: 0 0 0 4px rgba(77, 137, 255, 0.15);
+    .file-name {
+      font-size: 14px;
+      color: var(--muted);
+      min-height: 20px;
+      text-align: center;
+      word-break: break-word;
+    }
+
+    .actions {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
     }
 
     .btn {
       border: 0;
-      border-radius: 12px;
-      padding: 12px 16px;
-      font-size: 13px;
+      border-radius: 14px;
+      padding: 13px 20px;
+      font-size: 14px;
       font-weight: 800;
       cursor: pointer;
       transition: var(--transition);
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      min-height: 44px;
-      text-decoration: none;
+      min-height: 46px;
     }
 
-    .btn:hover { transform: translateY(-1px); }
-    .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+    .btn:hover {
+      transform: translateY(-1px);
+    }
 
     .btn-primary {
       color: #fff;
       background: linear-gradient(135deg, var(--blue-1), var(--blue-2), var(--blue-3));
-      box-shadow: 0 8px 22px rgba(46, 108, 255, 0.2);
+      box-shadow: 0 10px 28px rgba(46, 108, 255, 0.18);
     }
 
     .btn-secondary {
-      color: #dbe6ff;
+      color: #dce7ff;
       background: rgba(255,255,255,0.04);
       border: 1px solid rgba(255,255,255,0.08);
-    }
-
-    .btn-success {
-      color: #fff;
-      background: linear-gradient(135deg, #13975d, var(--green));
-    }
-
-    .btn-danger {
-      color: #fff;
-      background: linear-gradient(135deg, #d1445e, var(--danger));
     }
 
     .status-box {
-      margin-bottom: 16px;
+      border: 1px solid rgba(130, 166, 255, 0.12);
+      border-radius: 16px;
+      background: rgba(255,255,255,0.03);
       padding: 14px 16px;
-      border-radius: 16px;
-      border: 1px solid rgba(132, 164, 255, 0.12);
-      background: rgba(255,255,255,0.03);
-      color: #d9e4ff;
-      white-space: pre-line;
+      color: #dbe6ff;
       min-height: 52px;
+      white-space: pre-line;
     }
 
-    .workspace {
+    .hidden-workspace {
       display: none;
-      grid-template-columns: 320px 1fr 320px;
-      gap: 14px;
-      min-height: 780px;
-    }
-
-    .workspace.active {
-      display: grid;
-    }
-
-    .column {
-      border: 1px solid var(--line);
-      border-radius: 20px;
-      background: linear-gradient(180deg, rgba(18, 33, 55, 0.9), rgba(12, 24, 40, 0.92));
-      overflow: hidden;
-      min-height: 100%;
-    }
-
-    .column-head {
-      padding: 14px 16px 12px;
-      border-bottom: 1px solid rgba(255,255,255,0.05);
-    }
-
-    .column-head h2 {
-      margin: 0 0 4px;
-      font-size: 17px;
-      font-weight: 800;
-    }
-
-    .column-head p {
-      margin: 0;
-      font-size: 12px;
-      color: var(--muted);
-      line-height: 1.45;
-    }
-
-    .left-tools {
-      padding: 12px 14px;
-      display: grid;
-      gap: 10px;
-      border-bottom: 1px solid rgba(255,255,255,0.05);
-    }
-
-    .thumb-grid {
-      padding: 12px;
-      display: grid;
-      gap: 10px;
-      max-height: 920px;
-      overflow: auto;
-    }
-
-    .thumb-card {
-      border: 1px solid rgba(255,255,255,0.07);
-      border-radius: 16px;
-      background: rgba(255,255,255,0.03);
-      padding: 10px;
-      cursor: pointer;
-      transition: var(--transition);
-    }
-
-    .thumb-card:hover {
-      border-color: rgba(132, 164, 255, 0.3);
-      transform: translateY(-1px);
-    }
-
-    .thumb-card.active {
-      border-color: #6f9bff;
-      box-shadow: 0 0 0 1px rgba(111, 155, 255, 0.35);
-    }
-
-    .thumb-top {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 8px;
-      margin-bottom: 8px;
-    }
-
-    .thumb-name {
-      font-size: 12px;
-      font-weight: 700;
-      color: #ebf2ff;
-      flex: 1;
-      word-break: break-word;
-    }
-
-    .thumb-check {
-      width: 16px;
-      height: 16px;
-      accent-color: #4f8dff;
-      cursor: pointer;
-      margin-top: 1px;
-    }
-
-    .thumb-preview {
-      width: 100%;
-      aspect-ratio: 1 / 1;
-      border-radius: 12px;
-      overflow: hidden;
-      background:
-        linear-gradient(45deg, #f2f5fb 25%, #ffffff 25%, #ffffff 50%, #f2f5fb 50%, #f2f5fb 75%, #ffffff 75%, #ffffff 100%);
-      background-size: 20px 20px;
-      border: 1px solid rgba(255,255,255,0.06);
-    }
-
-    .thumb-preview img {
-      width: 100%;
-      height: 100%;
-      object-fit: contain;
-      display: block;
-    }
-
-    .thumb-meta {
-      display: flex;
-      justify-content: space-between;
-      gap: 8px;
-      margin-top: 8px;
-      font-size: 11px;
-      color: var(--muted);
-    }
-
-    .viewer-toolbar {
-      padding: 12px 14px;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      border-bottom: 1px solid rgba(255,255,255,0.05);
-    }
-
-    .viewer-area {
-      padding: 14px;
-    }
-
-    .viewer-stage {
-      width: 100%;
-      min-height: 680px;
-      border-radius: 18px;
-      overflow: hidden;
-      background:
-        linear-gradient(45deg, #f2f5fb 25%, #ffffff 25%, #ffffff 50%, #f2f5fb 50%, #f2f5fb 75%, #ffffff 75%, #ffffff 100%);
-      background-size: 24px 24px;
-      border: 1px solid rgba(255,255,255,0.06);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .viewer-stage img {
-      width: 100%;
-      height: 100%;
-      object-fit: contain;
-      display: block;
-    }
-
-    .viewer-empty {
-      color: #87a0d1;
-      font-size: 15px;
-      padding: 24px;
-      text-align: center;
-    }
-
-    .right-body {
-      padding: 12px;
-      display: grid;
-      gap: 12px;
-    }
-
-    .tool-card {
-      border: 1px solid rgba(255,255,255,0.06);
-      border-radius: 16px;
-      background: rgba(255,255,255,0.03);
-      padding: 12px;
-    }
-
-    .tool-card h3 {
-      margin: 0 0 10px;
-      font-size: 14px;
-      font-weight: 800;
-    }
-
-    .tool-grid {
-      display: grid;
-      gap: 10px;
-    }
-
-    .preview-mini {
-      width: 100%;
-      aspect-ratio: 1 / 1;
-      border-radius: 14px;
-      overflow: hidden;
-      background:
-        linear-gradient(45deg, #f2f5fb 25%, #ffffff 25%, #ffffff 50%, #f2f5fb 50%, #f2f5fb 75%, #ffffff 75%, #ffffff 100%);
-      background-size: 20px 20px;
-      border: 1px solid rgba(255,255,255,0.06);
-    }
-
-    .preview-mini img {
-      width: 100%;
-      height: 100%;
-      object-fit: contain;
-      display: block;
-    }
-
-    .note {
-      font-size: 12px;
-      line-height: 1.5;
-      color: var(--muted);
-    }
-
-    .editor-modal {
-      position: fixed;
-      inset: 0;
-      background: rgba(2, 8, 18, 0.86);
-      backdrop-filter: blur(10px);
-      display: none;
-      align-items: center;
-      justify-content: center;
-      z-index: 9999;
-      padding: 16px;
-    }
-
-    .editor-modal.active {
-      display: flex;
-    }
-
-    .editor-card {
-      width: min(1440px, 100%);
-      max-height: 94vh;
-      overflow: auto;
-      border-radius: 22px;
-      border: 1px solid var(--line);
-      background: linear-gradient(180deg, rgba(12, 21, 36, 0.98), rgba(8, 15, 27, 0.98));
-      box-shadow: 0 28px 80px rgba(0, 0, 0, 0.48);
-    }
-
-    .editor-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      padding: 16px 18px;
-      border-bottom: 1px solid rgba(255,255,255,0.05);
-      position: sticky;
-      top: 0;
-      background: rgba(12, 21, 36, 0.96);
-      z-index: 2;
-    }
-
-    .editor-head h2 {
-      margin: 0;
-      font-size: 18px;
-      font-weight: 800;
-    }
-
-    .editor-layout {
-      padding: 16px 18px 18px;
-      display: grid;
-      grid-template-columns: 1.1fr 0.9fr;
-      gap: 16px;
-    }
-
-    .editor-stage {
-      border: 1px solid rgba(255,255,255,0.07);
-      border-radius: 18px;
-      padding: 12px;
-      background: rgba(255,255,255,0.02);
-    }
-
-    .editor-canvas-wrap {
-      width: 100%;
-      height: 72vh;
-      min-height: 540px;
-      border-radius: 14px;
-      overflow: hidden;
-      background:
-        linear-gradient(45deg, #f2f5fb 25%, #ffffff 25%, #ffffff 50%, #f2f5fb 50%, #f2f5fb 75%, #ffffff 75%, #ffffff 100%);
-      background-size: 24px 24px;
-      position: relative;
-    }
-
-    #editorCanvas {
-      width: 100%;
-      height: 100%;
-      display: block;
-      cursor: crosshair;
-    }
-
-    .editor-side {
-      display: grid;
-      gap: 12px;
-    }
-
-    .editor-panel {
-      border: 1px solid rgba(255,255,255,0.06);
-      border-radius: 16px;
-      background: rgba(255,255,255,0.03);
-      padding: 12px;
-    }
-
-    .editor-panel h3 {
-      margin: 0 0 10px;
-      font-size: 14px;
-      font-weight: 800;
-    }
-
-    .editor-toolbar {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-
-    .tool-btn {
-      padding: 11px 12px;
-      border-radius: 12px;
-      border: 1px solid rgba(255,255,255,0.08);
-      background: rgba(255,255,255,0.04);
-      color: #fff;
-      cursor: pointer;
-      font-weight: 700;
-    }
-
-    .tool-btn.active {
-      border-color: rgba(118, 180, 255, 0.5);
-      box-shadow: 0 0 0 4px rgba(118, 180, 255, 0.08);
-    }
-
-    .editor-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 10px;
-    }
-
-    .preview-final {
-      width: 100%;
-      aspect-ratio: 1 / 1;
-      border-radius: 14px;
-      overflow: hidden;
-      background:
-        linear-gradient(45deg, #f2f5fb 25%, #ffffff 25%, #ffffff 50%, #f2f5fb 50%, #f2f5fb 75%, #ffffff 75%, #ffffff 100%);
-      background-size: 24px 24px;
-      border: 1px solid rgba(255,255,255,0.06);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .preview-final img {
-      width: 100%;
-      height: 100%;
-      object-fit: contain;
-      display: block;
     }
 
     .loading-overlay {
@@ -761,7 +310,7 @@
     }
 
     .loading-step.active .loading-step-dot { background: var(--blue-2); }
-    .loading-step.done .loading-step-dot { background: var(--green); }
+    .loading-step.done .loading-step-dot { background: #18b36c; }
 
     .loading-step-status {
       font-size: 11px;
@@ -770,370 +319,84 @@
       text-transform: uppercase;
     }
 
-    @media (max-width: 1320px) {
-      .workspace {
-        grid-template-columns: 280px 1fr 300px;
-      }
-
-      .settings-grid {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-      }
-    }
-
-    @media (max-width: 1100px) {
-      .workspace {
-        grid-template-columns: 1fr;
-      }
-
-      .editor-layout {
-        grid-template-columns: 1fr;
-      }
-    }
-
     @media (max-width: 760px) {
-      .topbar {
-        flex-direction: column;
-        align-items: flex-start;
+      .card-inner {
+        padding: 30px 20px;
       }
 
-      .settings-grid {
-        grid-template-columns: 1fr;
+      .brand {
+        justify-content: center;
+        text-align: center;
       }
 
-      .toolbar-top {
+      .brand-text h1 {
+        font-size: 34px;
+      }
+
+      .brand-text p {
+        font-size: 16px;
+      }
+
+      .file-picker {
+        min-width: 100%;
+      }
+
+      .actions {
         flex-direction: column;
-        align-items: stretch;
       }
 
       .btn {
         width: 100%;
       }
-
-      .editor-grid {
-        grid-template-columns: 1fr;
-      }
     }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="topbar">
-      <div class="brand">
-        <img class="brand-logo" src="https://raw.githubusercontent.com/Pegdobrasil/peg-imagens-site/refs/heads/main/logo%20png%20branca.png" alt="PEG do Brasil">
-        <div>
-          <h2 class="brand-title">PhotoPEG Studio</h2>
-          <p class="brand-subtitle">Dashboard clean, revisão visual rápida e ajustes em lote.</p>
-        </div>
-      </div>
-
-      <div class="topbar-right">
-        <div class="chip">Até 50 imagens por lote</div>
-        <div class="chip">Visualização original e editada</div>
-        <div class="chip">Ações em lote</div>
-      </div>
-    </div>
-
-    <div class="main-panel">
-      <div class="hero">
-        <h1>Editor de Imagens em Lote</h1>
-        <p>Envie seu lote, revise cada imagem em uma galeria moderna, compare original, editada e máscara, ajuste a imagem ativa ou aplique mudanças nas selecionadas.</p>
-      </div>
-
-      <div class="panel-body">
-        <div class="upload-card">
-          <div class="upload-head">
-            <div>
-              <h2 class="upload-title">Upload do lote</h2>
-              <p class="upload-description">Formatos aceitos: JPG, JPEG, PNG e WEBP. Nesta versão o painel aceita até 50 imagens por lote.</p>
-            </div>
-            <div class="chip">Railway + GitHub</div>
+  <div class="shell">
+    <div class="card">
+      <div class="card-inner">
+        <div class="brand">
+          <img
+            class="brand-logo"
+            src="https://raw.githubusercontent.com/Pegdobrasil/peg-imagens-site/refs/heads/main/logo%20png%20branca.png"
+            alt="PEG do Brasil"
+          />
+          <div class="brand-text">
+            <h1>PhotoPEG Studio</h1>
+            <p>Upload rápido para edição em lote</p>
           </div>
-
-          <form id="uploadForm">
-            <input id="files" class="file-input" type="file" name="files" accept=".jpg,.jpeg,.png,.webp" multiple required>
-
-            <div class="settings-grid">
-              <div class="field">
-                <label for="margin_percent">Margem (%)</label>
-                <div class="slider-wrap">
-                  <div class="slider-head">
-                    <span>Ajuste da margem</span>
-                    <span class="slider-value" id="margin_percent_value">8%</span>
-                  </div>
-                  <input id="margin_percent" type="range" min="0" max="30" step="1" value="8" data-suffix="%" data-output="margin_percent_value">
-                </div>
-              </div>
-
-              <div class="field">
-                <label for="jpeg_quality">Qualidade JPG</label>
-                <div class="slider-wrap">
-                  <div class="slider-head">
-                    <span>Qualidade</span>
-                    <span class="slider-value" id="jpeg_quality_value">95</span>
-                  </div>
-                  <input id="jpeg_quality" type="range" min="70" max="100" step="1" value="95" data-output="jpeg_quality_value">
-                </div>
-              </div>
-
-              <div class="field">
-                <label for="zoom_percent">Zoom inicial (%)</label>
-                <div class="slider-wrap">
-                  <div class="slider-head">
-                    <span>Zoom inicial</span>
-                    <span class="slider-value" id="zoom_percent_value">100%</span>
-                  </div>
-                  <input id="zoom_percent" type="range" min="50" max="250" step="1" value="100" data-suffix="%" data-output="zoom_percent_value">
-                </div>
-              </div>
-
-              <div class="field">
-                <label for="offset_x">Posição X</label>
-                <div class="slider-wrap">
-                  <div class="slider-head">
-                    <span>Horizontal</span>
-                    <span class="slider-value" id="offset_x_value">0</span>
-                  </div>
-                  <input id="offset_x" type="range" min="-500" max="500" step="1" value="0" data-output="offset_x_value">
-                </div>
-              </div>
-
-              <div class="field">
-                <label for="offset_y">Posição Y</label>
-                <div class="slider-wrap">
-                  <div class="slider-head">
-                    <span>Vertical</span>
-                    <span class="slider-value" id="offset_y_value">0</span>
-                  </div>
-                  <input id="offset_y" type="range" min="-500" max="500" step="1" value="0" data-output="offset_y_value">
-                </div>
-              </div>
-            </div>
-
-            <div class="toolbar-top">
-              <button id="submitBtn" class="btn btn-primary" type="submit">Processar lote</button>
-              <button id="zipBtn" class="btn btn-secondary" type="button">Baixar tudo em ZIP</button>
-              <button id="clearBtn" class="btn btn-secondary" type="button">Limpar painel</button>
-            </div>
-          </form>
         </div>
+
+        <form id="uploadForm" class="upload-box">
+          <h2 class="upload-title">Escolha os ficheiros</h2>
+          <p class="upload-subtitle">
+            Selecione suas imagens para iniciar o processamento.
+          </p>
+
+          <label class="file-picker">
+            <span class="file-icon">📁</span>
+            <span>Escolher ficheiros</span>
+            <input
+              id="files"
+              type="file"
+              name="files"
+              accept=".jpg,.jpeg,.png,.webp"
+              multiple
+              required
+            />
+          </label>
+
+          <div id="fileName" class="file-name">Nenhum ficheiro selecionado</div>
+
+          <div class="actions">
+            <button id="submitBtn" class="btn btn-primary" type="submit">Processar lote</button>
+            <button id="clearBtn" class="btn btn-secondary" type="button">Limpar</button>
+          </div>
+        </form>
 
         <div class="status-box" id="status">Aguardando envio das imagens.</div>
 
-        <div id="workspace" class="workspace">
-          <aside class="column">
-            <div class="column-head">
-              <h2>Galeria</h2>
-              <p>Clique na miniatura para abrir a imagem. Marque várias para ações em lote.</p>
-            </div>
-
-            <div class="left-tools">
-              <button id="selectAllBtn" class="btn btn-secondary" type="button">Selecionar todas</button>
-              <button id="clearSelectionBtn" class="btn btn-secondary" type="button">Limpar seleção</button>
-              <button id="applySelectedBtn" class="btn btn-primary" type="button">Aplicar às selecionadas</button>
-              <button id="centerSelectedBtn" class="btn btn-secondary" type="button">Centralizar selecionadas</button>
-            </div>
-
-            <div id="thumbGrid" class="thumb-grid"></div>
-          </aside>
-
-          <section class="column">
-            <div class="column-head">
-              <h2>Visualização</h2>
-              <p>Área principal para revisar a imagem ativa e alternar entre os modos.</p>
-            </div>
-
-            <div class="viewer-toolbar">
-              <button class="btn btn-secondary view-mode-btn" data-view="edited" type="button">Editada</button>
-              <button class="btn btn-secondary view-mode-btn" data-view="original" type="button">Original</button>
-              <button class="btn btn-secondary view-mode-btn" data-view="mask" type="button">Máscara</button>
-            </div>
-
-            <div class="viewer-area">
-              <div id="viewerStage" class="viewer-stage">
-                <div class="viewer-empty">Nenhuma imagem selecionada.</div>
-              </div>
-            </div>
-          </section>
-
-          <aside class="column">
-            <div class="column-head">
-              <h2>Ferramentas</h2>
-              <p>Controles rápidos para imagem ativa e ajustes em lote.</p>
-            </div>
-
-            <div class="right-body">
-              <div class="tool-card">
-                <h3>Prévia ativa</h3>
-                <div class="preview-mini">
-                  <img id="activePreviewMini" src="" alt="Prévia ativa">
-                </div>
-              </div>
-
-              <div class="tool-card">
-                <h3>Ajustes da imagem ativa</h3>
-                <div class="tool-grid">
-                  <div class="field">
-                    <label for="active_margin">Margem (%)</label>
-                    <div class="slider-wrap">
-                      <div class="slider-head"><span>Margem</span><span class="slider-value" id="active_margin_value">8%</span></div>
-                      <input id="active_margin" type="range" min="0" max="30" step="1" value="8" data-suffix="%" data-output="active_margin_value">
-                    </div>
-                  </div>
-
-                  <div class="field">
-                    <label for="active_zoom">Zoom (%)</label>
-                    <div class="slider-wrap">
-                      <div class="slider-head"><span>Zoom</span><span class="slider-value" id="active_zoom_value">100%</span></div>
-                      <input id="active_zoom" type="range" min="50" max="250" step="1" value="100" data-suffix="%" data-output="active_zoom_value">
-                    </div>
-                  </div>
-
-                  <div class="field">
-                    <label for="active_x">Posição X</label>
-                    <div class="slider-wrap">
-                      <div class="slider-head"><span>Horizontal</span><span class="slider-value" id="active_x_value">0</span></div>
-                      <input id="active_x" type="range" min="-500" max="500" step="1" value="0" data-output="active_x_value">
-                    </div>
-                  </div>
-
-                  <div class="field">
-                    <label for="active_y">Posição Y</label>
-                    <div class="slider-wrap">
-                      <div class="slider-head"><span>Vertical</span><span class="slider-value" id="active_y_value">0</span></div>
-                      <input id="active_y" type="range" min="-500" max="500" step="1" value="0" data-output="active_y_value">
-                    </div>
-                  </div>
-
-                  <div class="field">
-                    <label for="active_quality">Qualidade JPG</label>
-                    <div class="slider-wrap">
-                      <div class="slider-head"><span>Qualidade</span><span class="slider-value" id="active_quality_value">95</span></div>
-                      <input id="active_quality" type="range" min="70" max="100" step="1" value="95" data-output="active_quality_value">
-                    </div>
-                  </div>
-                </div>
-
-                <div class="toolbar-top">
-                  <button id="saveActiveBtn" class="btn btn-primary" type="button">Salvar imagem</button>
-                  <button id="centerActiveBtn" class="btn btn-secondary" type="button">Centralizar imagem</button>
-                  <button id="openMaskEditorBtn" class="btn btn-secondary" type="button">Corrigir recorte</button>
-                  <button id="downloadActiveBtn" class="btn btn-success" type="button">Baixar JPG</button>
-                </div>
-              </div>
-
-              <div class="tool-card">
-                <h3>Ações em lote</h3>
-                <p class="note">Os sliders do topo são usados como base para aplicar ajustes nas imagens marcadas na galeria. Para lotes grandes, teste primeiro com 5, 10 e 20 imagens para validar estabilidade.</p>
-              </div>
-            </div>
-          </aside>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div id="editorModal" class="editor-modal">
-    <div class="editor-card">
-      <div class="editor-head">
-        <h2 id="modalTitle">Correção manual do recorte</h2>
-        <button id="closeEditorBtn" class="btn btn-secondary" type="button">Fechar</button>
-      </div>
-
-      <div class="editor-layout">
-        <div class="editor-stage">
-          <div class="editor-canvas-wrap">
-            <canvas id="editorCanvas"></canvas>
-          </div>
-        </div>
-
-        <div class="editor-side">
-          <div class="editor-panel">
-            <h3>Ferramentas</h3>
-            <div class="editor-toolbar">
-              <button class="tool-btn active" data-tool="erase" type="button">Apagar fundo</button>
-              <button class="tool-btn" data-tool="restore" type="button">Restaurar produto</button>
-              <button class="tool-btn" data-tool="pan" type="button">Mover área</button>
-              <button id="undoBtn" class="tool-btn" type="button">Desfazer</button>
-              <button id="redoBtn" class="tool-btn" type="button">Refazer</button>
-              <button id="fitBtn" class="tool-btn" type="button">Centralizar visão</button>
-            </div>
-          </div>
-
-          <div class="editor-panel">
-            <h3>Ajustes do editor</h3>
-            <div class="editor-grid">
-              <div class="field">
-                <label for="brushSize">Tamanho do pincel</label>
-                <div class="slider-wrap">
-                  <div class="slider-head"><span>Pincel</span><span class="slider-value" id="brushSize_value">28</span></div>
-                  <input id="brushSize" type="range" min="5" max="200" step="1" value="28" data-output="brushSize_value">
-                </div>
-              </div>
-
-              <div class="field">
-                <label for="editorZoomView">Zoom da área (%)</label>
-                <div class="slider-wrap">
-                  <div class="slider-head"><span>Zoom da área</span><span class="slider-value" id="editorZoomView_value">100%</span></div>
-                  <input id="editorZoomView" type="range" min="20" max="600" step="1" value="100" data-suffix="%" data-output="editorZoomView_value">
-                </div>
-              </div>
-
-              <div class="field">
-                <label for="editorMargin">Margem final (%)</label>
-                <div class="slider-wrap">
-                  <div class="slider-head"><span>Margem</span><span class="slider-value" id="editorMargin_value">8%</span></div>
-                  <input id="editorMargin" type="range" min="0" max="30" step="1" value="8" data-suffix="%" data-output="editorMargin_value">
-                </div>
-              </div>
-
-              <div class="field">
-                <label for="editorFinalZoom">Zoom final (%)</label>
-                <div class="slider-wrap">
-                  <div class="slider-head"><span>Zoom final</span><span class="slider-value" id="editorFinalZoom_value">100%</span></div>
-                  <input id="editorFinalZoom" type="range" min="50" max="250" step="1" value="100" data-suffix="%" data-output="editorFinalZoom_value">
-                </div>
-              </div>
-
-              <div class="field">
-                <label for="editorOffsetX">Posição X</label>
-                <div class="slider-wrap">
-                  <div class="slider-head"><span>Posição X</span><span class="slider-value" id="editorOffsetX_value">0</span></div>
-                  <input id="editorOffsetX" type="range" min="-500" max="500" step="1" value="0" data-output="editorOffsetX_value">
-                </div>
-              </div>
-
-              <div class="field">
-                <label for="editorOffsetY">Posição Y</label>
-                <div class="slider-wrap">
-                  <div class="slider-head"><span>Posição Y</span><span class="slider-value" id="editorOffsetY_value">0</span></div>
-                  <input id="editorOffsetY" type="range" min="-500" max="500" step="1" value="0" data-output="editorOffsetY_value">
-                </div>
-              </div>
-
-              <div class="field">
-                <label for="editorJpegQuality">Qualidade JPG</label>
-                <div class="slider-wrap">
-                  <div class="slider-head"><span>Qualidade</span><span class="slider-value" id="editorJpegQuality_value">95</span></div>
-                  <input id="editorJpegQuality" type="range" min="70" max="100" step="1" value="95" data-output="editorJpegQuality_value">
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="editor-panel">
-            <h3>Prévia final</h3>
-            <div class="preview-final">
-              <img id="editorPreviewFinal" src="" alt="Prévia final">
-            </div>
-          </div>
-
-          <div class="editor-panel">
-            <div class="toolbar-top">
-              <button id="saveMaskBtn" class="btn btn-primary" type="button">Salvar correção</button>
-              <button id="downloadCurrentBtn" class="btn btn-success" type="button">Baixar JPG</button>
-            </div>
-          </div>
-        </div>
+        <div id="workspace" class="hidden-workspace"></div>
       </div>
     </div>
   </div>
@@ -1141,7 +404,7 @@
   <div id="loadingOverlay" class="loading-overlay">
     <div class="loading-card">
       <h2 class="loading-title">Processando imagens</h2>
-      <p class="loading-subtitle" id="loadingSubtitle">Aguarde enquanto o sistema envia, recorta, padroniza e monta a galeria de revisão.</p>
+      <p class="loading-subtitle" id="loadingSubtitle">Aguarde enquanto o sistema envia e prepara o lote.</p>
 
       <div class="loading-progress-top">
         <span id="loadingCurrentStep">Preparando lote...</span>
@@ -1154,29 +417,29 @@
 
       <div class="loading-steps">
         <div class="loading-step" data-step="1">
-          <div class="loading-step-left"><span class="loading-step-dot"></span><span>Separando arquivos do lote</span></div>
+          <div class="loading-step-left"><span class="loading-step-dot"></span><span>Separando arquivos</span></div>
           <span class="loading-step-status">aguardando</span>
         </div>
         <div class="loading-step" data-step="2">
-          <div class="loading-step-left"><span class="loading-step-dot"></span><span>Enviando imagens ao servidor</span></div>
+          <div class="loading-step-left"><span class="loading-step-dot"></span><span>Enviando ao servidor</span></div>
           <span class="loading-step-status">aguardando</span>
         </div>
         <div class="loading-step" data-step="3">
-          <div class="loading-step-left"><span class="loading-step-dot"></span><span>Removendo fundo e gerando máscara</span></div>
+          <div class="loading-step-left"><span class="loading-step-dot"></span><span>Removendo fundo</span></div>
           <span class="loading-step-status">aguardando</span>
         </div>
         <div class="loading-step" data-step="4">
-          <div class="loading-step-left"><span class="loading-step-dot"></span><span>Montando grade e previews</span></div>
+          <div class="loading-step-left"><span class="loading-step-dot"></span><span>Gerando arquivos</span></div>
           <span class="loading-step-status">aguardando</span>
         </div>
         <div class="loading-step" data-step="5">
-          <div class="loading-step-left"><span class="loading-step-dot"></span><span>Finalizando dashboard</span></div>
+          <div class="loading-step-left"><span class="loading-step-dot"></span><span>Finalizando</span></div>
           <span class="loading-step-status">aguardando</span>
         </div>
       </div>
     </div>
   </div>
 
-  <script src="/static/app.js?v=6"></script>
+  <script src="/static/app.js?v=8"></script>
 </body>
 </html>
