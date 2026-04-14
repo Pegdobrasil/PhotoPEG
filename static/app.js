@@ -396,19 +396,19 @@ function renderGallery(items) {
     card.className = "gallery-card";
 
     const transparentClass = item.background_mode === "transparent" ? "transparent-bg" : "";
-    const outputLabel = `${item.output_format.toUpperCase()} • ${item.output_width}x${item.output_height} • ${item.background_mode === "transparent" ? "Transparente" : "Branco"}`;
+    const outputLabel = `${String(item.output_format).toUpperCase()} • ${item.output_width}x${item.output_height} • ${item.background_mode === "transparent" ? "Transparente" : "Branco"}`;
 
     card.innerHTML = `
       <div class="gallery-name">${item.display_name || item.output_filename}</div>
       <div class="gallery-meta">${outputLabel}</div>
 
+      <div class="gallery-preview ${transparentClass}">
+        <img src="${cacheBust(item.preview_url)}" alt="${item.filename}" loading="lazy">
+      </div>
+
       <div class="gallery-rename">
         <input type="text" class="rename-input" value="${fileBaseFromDisplayName(item.display_name || item.output_filename)}">
         <button class="btn btn-secondary rename-btn" type="button">Renomear</button>
-      </div>
-
-      <div class="gallery-preview ${transparentClass}">
-        <img src="${cacheBust(item.preview_url)}" alt="${item.filename}" loading="lazy">
       </div>
 
       <div class="result-actions">
@@ -1055,7 +1055,9 @@ outputFormat.addEventListener("change", () => handleFormatChange(outputFormat, b
 editorOutputFormat.addEventListener("change", () => handleFormatChange(editorOutputFormat, editorBackgroundMode));
 
 backgroundMode.addEventListener("change", () => {
-  if (outputFormat.value === "jpg" || outputFormat.value === "jpeg") backgroundMode.value = "white";
+  if (outputFormat.value === "jpg" || outputFormat.value === "jpeg") {
+    backgroundMode.value = "white";
+  }
 });
 
 editorBackgroundMode.addEventListener("change", () => {
@@ -1117,7 +1119,7 @@ form.addEventListener("submit", async (event) => {
 
     finishLoadingSuccess();
     setStatus(
-      `Concluído.\nImagens processadas: ${data.count}\nFormato final: ${data.output_format.toUpperCase()}\nFundo: ${data.background_mode === "transparent" ? "transparente" : "branco"}\nTamanho: ${data.output_width}x${data.output_height} px`
+      `Concluído.\nImagens processadas: ${data.count}\nFormato final: ${String(data.output_format).toUpperCase()}\nFundo: ${data.background_mode === "transparent" ? "transparente" : "branco"}\nTamanho: ${data.output_width}x${data.output_height} px`
     );
 
     resultText.textContent = `Lote concluído com ${data.count} imagem(ns).`;
