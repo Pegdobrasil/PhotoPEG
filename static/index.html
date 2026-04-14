@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PhotoPEG Studio</title>
 
-  <link rel="icon" href="/static/favicon-32x32.png?v=13" sizes="32x32" type="image/png">
-  <link rel="shortcut icon" href="/static/favicon-32x32.png?v=13" type="image/png">
-  <link rel="apple-touch-icon" href="/static/favicon-32x32.png?v=13">
+  <link rel="icon" href="/static/favicon-32x32.png?v=14" sizes="32x32" type="image/png">
+  <link rel="shortcut icon" href="/static/favicon-32x32.png?v=14" type="image/png">
+  <link rel="apple-touch-icon" href="/static/favicon-32x32.png?v=14">
 
   <style>
     * { box-sizing: border-box; }
@@ -445,6 +445,7 @@
       display: grid;
       grid-template-columns: 1fr 360px;
       gap: 16px;
+      align-items: start;
     }
 
     .editor-canvas-wrap {
@@ -454,26 +455,38 @@
 
     .canvas-stage {
       width: 100%;
-      max-width: 1000px;
-      margin: 0 auto;
-      aspect-ratio: 1 / 1;
+      min-height: 520px;
+      max-height: 72vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: auto;
       border-radius: 14px;
-      overflow: hidden;
       background:
         linear-gradient(45deg, #f2f5fb 25%, #ffffff 25%, #ffffff 50%, #f2f5fb 50%, #f2f5fb 75%, #ffffff 75%, #ffffff 100%);
       background-size: 24px 24px;
       border: 1px solid rgba(255,255,255,0.06);
+      position: relative;
+      padding: 14px;
+    }
+
+    .canvas-viewport {
+      width: 100%;
       display: flex;
       align-items: center;
       justify-content: center;
-      position: relative;
+      transform-origin: center center;
+      transition: transform 0.18s ease;
     }
 
     #editorCanvas {
-      width: 100%;
-      height: 100%;
+      width: 1000px;
+      height: 1000px;
+      max-width: 100%;
+      max-height: 100%;
       display: block;
       cursor: crosshair;
+      background: transparent;
     }
 
     .editor-sidebar {
@@ -669,6 +682,10 @@
       .editor-layout {
         grid-template-columns: 1fr;
       }
+
+      .canvas-stage {
+        max-height: 60vh;
+      }
     }
 
     @media (max-width: 760px) {
@@ -710,6 +727,12 @@
 
       .btn {
         width: 100%;
+      }
+
+      .canvas-stage {
+        min-height: 380px;
+        max-height: 52vh;
+        padding: 8px;
       }
     }
   </style>
@@ -803,7 +826,9 @@
       <div class="editor-layout">
         <div class="editor-panel editor-canvas-wrap">
           <div class="canvas-stage">
-            <canvas id="editorCanvas" width="1000" height="1000"></canvas>
+            <div class="canvas-viewport" id="canvasViewport">
+              <canvas id="editorCanvas" width="1000" height="1000"></canvas>
+            </div>
           </div>
         </div>
 
@@ -823,12 +848,20 @@
           </div>
 
           <div class="editor-panel">
-            <h4 class="panel-title">Ajustes de imagem</h4>
+            <h4 class="panel-title">Ajustes de visualização e imagem</h4>
             <div class="slider-group">
+              <div class="field">
+                <label for="viewZoomRange">Zoom da janela (%)</label>
+                <div class="slider-wrap">
+                  <div class="slider-head"><span>Visualização</span><span class="slider-value" id="viewZoomRangeValue">70%</span></div>
+                  <input id="viewZoomRange" type="range" min="40" max="100" value="70">
+                </div>
+              </div>
+
               <div class="field">
                 <label for="zoomRange">Zoom da foto (%)</label>
                 <div class="slider-wrap">
-                  <div class="slider-head"><span>Ajuste</span><span class="slider-value" id="zoomRangeValue">100%</span></div>
+                  <div class="slider-head"><span>Foto</span><span class="slider-value" id="zoomRangeValue">100%</span></div>
                   <input id="zoomRange" type="range" min="40" max="140" value="100">
                 </div>
               </div>
@@ -933,6 +966,6 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=13"></script>
+  <script src="/static/app.js?v=14"></script>
 </body>
 </html>
