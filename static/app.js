@@ -35,6 +35,7 @@ const editorCtx = editorCanvas.getContext("2d");
 
 const toolModeButtons = Array.from(document.querySelectorAll(".tool-mode"));
 
+const zoomRange = document.getElementById("zoomRange");
 const lightRange = document.getElementById("lightRange");
 const brightnessRange = document.getElementById("brightnessRange");
 const contrastRange = document.getElementById("contrastRange");
@@ -42,6 +43,7 @@ const temperatureRange = document.getElementById("temperatureRange");
 const sharpnessRange = document.getElementById("sharpnessRange");
 const brushRange = document.getElementById("brushRange");
 
+const zoomRangeValue = document.getElementById("zoomRangeValue");
 const lightRangeValue = document.getElementById("lightRangeValue");
 const brightnessRangeValue = document.getElementById("brightnessRangeValue");
 const contrastRangeValue = document.getElementById("contrastRangeValue");
@@ -51,7 +53,6 @@ const brushRangeValue = document.getElementById("brushRangeValue");
 
 let loadingSimulationTimer = null;
 let currentProgress = 0;
-let currentBatch = null;
 
 const editorState = {
   item: null,
@@ -60,10 +61,8 @@ const editorState = {
   maskImg: null,
   originalMaskCanvas: document.createElement("canvas"),
   workingMaskCanvas: document.createElement("canvas"),
-  tempMaskCanvas: document.createElement("canvas"),
   baseCanvas: document.createElement("canvas"),
   retouchCanvas: document.createElement("canvas"),
-  displayCanvas: document.createElement("canvas"),
   history: [],
   historyIndex: -1,
   isDrawing: false,
@@ -78,14 +77,11 @@ const originalMaskCtx = editorState.originalMaskCanvas.getContext("2d");
 const workingMaskCtx = editorState.workingMaskCanvas.getContext("2d");
 const baseCtx = editorState.baseCanvas.getContext("2d");
 const retouchCtx = editorState.retouchCanvas.getContext("2d");
-const displayCtx = editorState.displayCanvas.getContext("2d");
 
 editorState.baseCanvas.width = 1000;
 editorState.baseCanvas.height = 1000;
 editorState.retouchCanvas.width = 1000;
 editorState.retouchCanvas.height = 1000;
-editorState.displayCanvas.width = 1000;
-editorState.displayCanvas.height = 1000;
 
 function setStatus(message) {
   statusBox.textContent = message;
@@ -247,9 +243,7 @@ async function postJson(url, payload) {
   });
 
   const data = await response.json();
-  if (!response.ok) {
-    throw new Error(data.error || "Falha na operação.");
-  }
+  if (!response.ok) throw new Error(data.error || "Falha na operação.");
   return data;
 }
 
@@ -288,7 +282,7 @@ function renderGallery(items) {
 
     card.innerHTML = `
       <div class="gallery-name">${item.filename}</div>
-      <div class="gallery-preview" data-image-id="${item.image_id}">
+      <div class="gallery-preview">
         <img src="${cacheBust(item.preview_url)}" alt="${item.filename}" loading="lazy">
       </div>
       <div class="result-actions">
@@ -325,6 +319,7 @@ function setToolMode(mode) {
 }
 
 function updateSliderLabels() {
+  zoomRangeValue.textContent = `${zoomRange.value}%`;
   lightRangeValue.textContent = lightRange.value;
   brightnessRangeValue.textContent = brightnessRange.value;
   contrastRangeValue.textContent = contrastRange.value;
@@ -334,6 +329,7 @@ function updateSliderLabels() {
 }
 
 function resetEditorControls() {
+  zoomRange.value = 100;
   lightRange.value = 0;
   brightnessRange.value = 0;
   contrastRange.value = 0;
@@ -354,6 +350,7 @@ function saveHistory() {
     ),
     retouch: retouchCtx.getImageData(0, 0, 1000, 1000),
     controls: {
+      zoom: Number(zoomRange.value),
       light: Number(lightRange.value),
       brightness: Number(brightnessRange.value),
       contrast: Number(contrastRange.value),
@@ -364,9 +361,7 @@ function saveHistory() {
 
   editorState.history = editorState.history.slice(0, editorState.historyIndex + 1);
   editorState.history.push(snapshot);
-  if (editorState.history.length > 30) {
-    editorState.history.shift();
-  }
+  if (editorState.history.length > 30) editorState.history.shift();
   editorState.historyIndex = editorState.history.length - 1;
 }
 
@@ -379,16 +374,16 @@ function restoreHistory(index) {
   editorState.workingMaskCanvas.width = snapshot.mask.width;
   editorState.workingMaskCanvas.height = snapshot.mask.height;
   workingMaskCtx.putImageData(snapshot.mask, 0, 0);
-
   retouchCtx.putImageData(snapshot.retouch, 0, 0);
 
+  zoomRange.value = snapshot.controls.zoom;
   lightRange.value = snapshot.controls.light;
   brightnessRange.value = snapshot.controls.brightness;
   contrastRange.value = snapshot.controls.contrast;
   temperatureRange.value = snapshot.controls.temperature;
   sharpnessRange.value = snapshot.controls.sharpness;
-  updateSliderLabels();
 
+  updateSliderLabels();
   redrawEditor(false);
 }
 
@@ -431,7 +426,6 @@ function applyAdjustments(ctx, width, height) {
     const strength = sharpness / 100;
     const src = ctx.getImageData(0, 0, width, height);
     const dst = ctx.createImageData(width, height);
-
     const s = src.data;
     const d = dst.data;
     const kernel = [0, -1, 0, -1, 5, -1, 0, -1, 0];
@@ -439,7 +433,6 @@ function applyAdjustments(ctx, width, height) {
     for (let y = 1; y < height - 1; y++) {
       for (let x = 1; x < width - 1; x++) {
         const idx = (y * width + x) * 4;
-
         for (let c = 0; c < 3; c++) {
           let acc = 0;
           let k = 0;
@@ -449,13 +442,8 @@ function applyAdjustments(ctx, width, height) {
               acc += s[srcIdx] * kernel[k++];
             }
           }
-
-          d[idx + c] = Math.max(
-            0,
-            Math.min(255, s[idx + c] * (1 - strength) + acc * strength)
-          );
+          d[idx + c] = Math.max(0, Math.min(255, s[idx + c] * (1 - strength) + acc * strength));
         }
-
         d[idx + 3] = s[idx + 3];
       }
     }
@@ -502,8 +490,10 @@ function renderBaseFromMask() {
   const maxW = 1000 - marginPx * 2;
   const maxH = 1000 - marginPx * 2;
   const fitScale = Math.min(maxW / bbox.w, maxH / bbox.h);
-  const drawW = Math.max(1, Math.round(bbox.w * fitScale));
-  const drawH = Math.max(1, Math.round(bbox.h * fitScale));
+
+  const zoomFactor = Number(zoomRange.value) / 100;
+  const drawW = Math.max(1, Math.round(bbox.w * fitScale * zoomFactor));
+  const drawH = Math.max(1, Math.round(bbox.h * fitScale * zoomFactor));
   const drawX = Math.round((1000 - drawW) / 2);
   const drawY = Math.round((1000 - drawH) / 2);
 
@@ -532,11 +522,8 @@ function redrawEditor(resetRetouch = true) {
     copyBaseToRetouch();
   }
 
-  displayCtx.clearRect(0, 0, 1000, 1000);
-  displayCtx.drawImage(editorState.retouchCanvas, 0, 0);
-
   editorCtx.clearRect(0, 0, 1000, 1000);
-  editorCtx.drawImage(editorState.displayCanvas, 0, 0);
+  editorCtx.drawImage(editorState.retouchCanvas, 0, 0);
 }
 
 function getAlphaBoundingBox(canvas) {
@@ -812,6 +799,7 @@ function bindDragAndDrop() {
 }
 
 filesInput.addEventListener("change", updateFileName);
+bindDragAndDrop();
 
 clearBtn.addEventListener("click", () => {
   filesInput.value = "";
@@ -819,8 +807,6 @@ clearBtn.addEventListener("click", () => {
   setStatus("Aguardando envio das imagens.");
   resetResult();
 });
-
-bindDragAndDrop();
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -852,7 +838,6 @@ form.addEventListener("submit", async (event) => {
       setLoadingStep(2, "enviando");
     });
 
-    currentBatch = data;
     finishLoadingSuccess();
     setStatus(
       `Concluído.\nImagens processadas: ${data.count}\nFormato final: JPG\nFundo: branco\nTamanho: 1000x1000 px`
@@ -880,7 +865,7 @@ toolModeButtons.forEach((btn) => {
   });
 });
 
-[lightRange, brightnessRange, contrastRange, temperatureRange, sharpnessRange, brushRange].forEach((input) => {
+[zoomRange, lightRange, brightnessRange, contrastRange, temperatureRange, sharpnessRange, brushRange].forEach((input) => {
   input.addEventListener("input", () => {
     updateSliderLabels();
     if (editorState.item) {
@@ -911,9 +896,7 @@ redoBtn.addEventListener("click", () => {
 });
 
 editorModal.addEventListener("click", (event) => {
-  if (event.target === editorModal) {
-    closeEditor();
-  }
+  if (event.target === editorModal) closeEditor();
 });
 
 updateSliderLabels();
