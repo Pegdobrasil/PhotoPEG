@@ -1,480 +1,1168 @@
-from __future__ import annotations
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PhotoPEG Studio</title>
 
-import base64
-import json
-import re
-import traceback
-import uuid
-from io import BytesIO
-from pathlib import Path
-from zipfile import ZIP_DEFLATED, ZipFile
+  <link rel="icon" href="/static/favicon-32x32.png?v=18" sizes="32x32" type="image/png">
+  <link rel="shortcut icon" href="/static/favicon-32x32.png?v=18" type="image/png">
+  <link rel="apple-touch-icon" href="/static/favicon-32x32.png?v=18">
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
-from PIL import Image
-from pydantic import BaseModel
-from rembg import new_session, remove
+  <style>
+    * { box-sizing: border-box; }
 
-app = FastAPI(title="PhotoPEG Studio")
-
-BASE_DIR = Path(__file__).resolve().parent
-STATIC_DIR = BASE_DIR / "static"
-STORAGE_DIR = BASE_DIR / "storage"
-BATCHES_DIR = STORAGE_DIR / "batches"
-
-STATIC_DIR.mkdir(exist_ok=True)
-STORAGE_DIR.mkdir(exist_ok=True)
-BATCHES_DIR.mkdir(exist_ok=True)
-
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
-app.mount("/media", StaticFiles(directory=STORAGE_DIR), name="media")
-
-MAX_FILES_PER_BATCH = 50
-DEFAULT_OUTPUT_WIDTH = 1000
-DEFAULT_OUTPUT_HEIGHT = 1000
-DEFAULT_MARGIN_PERCENT = 8
-DEFAULT_JPEG_QUALITY = 95
-
-bg_session = None
-
-
-class SaveEditedPayload(BaseModel):
-    data_url: str
-
-
-class RenameImagePayload(BaseModel):
-    new_name: str
-
-
-@app.get("/", response_class=HTMLResponse)
-def home():
-    index_path = STATIC_DIR / "index.html"
-    if not index_path.exists():
-        return HTMLResponse(
-            "<h1>Arquivo static/index.html não encontrado.</h1>",
-            status_code=500,
-        )
-    return index_path.read_text(encoding="utf-8")
-
-
-@app.get("/health")
-def health():
-    return {
-        "status": "ok",
-        "session_loaded": bg_session is not None,
-        "max_files_per_batch": MAX_FILES_PER_BATCH,
-        "default_output_width": DEFAULT_OUTPUT_WIDTH,
-        "default_output_height": DEFAULT_OUTPUT_HEIGHT,
-        "default_output_format": "jpg",
-        "default_background": "white",
+    :root {
+      --bg: #07111f;
+      --line: rgba(130, 166, 255, 0.14);
+      --line-strong: rgba(98, 153, 255, 0.4);
+      --text: #f3f7ff;
+      --muted: #9eb1d3;
+      --blue-1: #2e6cff;
+      --blue-2: #4d89ff;
+      --blue-3: #7ab6ff;
+      --green: #18b36c;
+      --danger: #ff5f7a;
+      --shadow: 0 18px 50px rgba(0, 0, 0, 0.32);
+      --neon: 0 0 0 1px rgba(122,182,255,0.45), 0 0 18px rgba(77,137,255,0.22);
+      --radius-xl: 26px;
+      --radius-lg: 20px;
+      --transition: 0.22s ease;
     }
 
-
-def get_bg_session():
-    global bg_session
-    if bg_session is None:
-        bg_session = new_session("u2netp")
-    return bg_session
-
-
-def safe_stem(filename: str) -> str:
-    stem = Path(filename).stem
-    stem = re.sub(r"[^a-zA-Z0-9\-_]+", "-", stem).strip("-")
-    return stem or "imagem"
-
-
-def safe_filename_base(name: str) -> str:
-    name = re.sub(r"\.[a-zA-Z0-9]+$", "", (name or "").strip())
-    name = re.sub(r"[^a-zA-Z0-9\-_ ]+", "", name)
-    name = re.sub(r"\s+", "-", name).strip("-_ ")
-    return name or "imagem"
-
-
-def media_url(path: Path) -> str:
-    rel = path.relative_to(STORAGE_DIR).as_posix()
-    return f"/media/{rel}"
-
-
-def remove_background(raw_bytes: bytes) -> Image.Image:
-    session = get_bg_session()
-    result = remove(raw_bytes, session=session)
-    return Image.open(BytesIO(result)).convert("RGBA")
-
-
-def normalize_output_options(
-    output_format: str,
-    background_mode: str,
-    output_width: int,
-    output_height: int,
-) -> tuple[str, str, int, int]:
-    output_format = (output_format or "jpg").lower().strip()
-    background_mode = (background_mode or "white").lower().strip()
-
-    if output_format not in {"jpg", "jpeg", "png"}:
-        output_format = "jpg"
-
-    if background_mode not in {"white", "transparent"}:
-        background_mode = "white"
-
-    if output_format in {"jpg", "jpeg"}:
-        background_mode = "white"
-
-    output_width = max(100, min(5000, int(output_width)))
-    output_height = max(100, min(5000, int(output_height)))
-
-    return output_format, background_mode, output_width, output_height
-
-
-def compose_output_image(
-    isolated_rgba: Image.Image,
-    output_width: int,
-    output_height: int,
-    margin_percent: int,
-    output_format: str,
-    background_mode: str,
-    jpeg_quality: int = DEFAULT_JPEG_QUALITY,
-) -> tuple[bytes, str, str]:
-    bbox = isolated_rgba.getbbox()
-    if bbox:
-        isolated_rgba = isolated_rgba.crop(bbox)
-
-    iw, ih = isolated_rgba.size
-    if iw <= 0 or ih <= 0:
-        raise ValueError("A imagem ficou vazia após a remoção de fundo.")
-
-    margin_x = int(output_width * (margin_percent / 100))
-    margin_y = int(output_height * (margin_percent / 100))
-
-    max_w = max(1, output_width - (margin_x * 2))
-    max_h = max(1, output_height - (margin_y * 2))
-
-    fit_scale = min(max_w / iw, max_h / ih)
-    new_w = max(1, int(iw * fit_scale))
-    new_h = max(1, int(ih * fit_scale))
-
-    resized = isolated_rgba.resize((new_w, new_h), Image.LANCZOS)
-
-    x = (output_width - new_w) // 2
-    y = (output_height - new_h) // 2
-
-    if background_mode == "transparent" and output_format == "png":
-        canvas = Image.new("RGBA", (output_width, output_height), (255, 255, 255, 0))
-        canvas.paste(resized, (x, y), resized)
-
-        output = BytesIO()
-        canvas.save(output, format="PNG", optimize=True)
-        output.seek(0)
-        return output.read(), "png", "image/png"
-
-    canvas = Image.new("RGBA", (output_width, output_height), (255, 255, 255, 255))
-    canvas.paste(resized, (x, y), resized)
-
-    if output_format == "png":
-        output = BytesIO()
-        canvas.save(output, format="PNG", optimize=True)
-        output.seek(0)
-        return output.read(), "png", "image/png"
-
-    if output_format == "jpeg":
-        output = BytesIO()
-        canvas.convert("RGB").save(output, format="JPEG", quality=jpeg_quality, optimize=True)
-        output.seek(0)
-        return output.read(), "jpeg", "image/jpeg"
-
-    output = BytesIO()
-    canvas.convert("RGB").save(output, format="JPEG", quality=jpeg_quality, optimize=True)
-    output.seek(0)
-    return output.read(), "jpg", "image/jpeg"
-
-
-def decode_data_url(data_url: str) -> bytes:
-    if "," not in data_url:
-        raise ValueError("Data URL inválida.")
-    _, encoded = data_url.split(",", 1)
-    return base64.b64decode(encoded)
-
-
-def load_batch_meta(batch_dir: Path) -> dict:
-    meta_path = batch_dir / "batch.json"
-    if not meta_path.exists():
-        return {}
-    return json.loads(meta_path.read_text(encoding="utf-8"))
-
-
-def save_batch_meta(batch_dir: Path, meta: dict) -> None:
-    meta_path = batch_dir / "batch.json"
-    meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
-
-
-@app.post("/api/process-batch")
-async def process_batch(
-    files: list[UploadFile] = File(...),
-    margin_percent: int = Form(DEFAULT_MARGIN_PERCENT),
-    jpeg_quality: int = Form(DEFAULT_JPEG_QUALITY),
-    output_format: str = Form("jpg"),
-    background_mode: str = Form("white"),
-    output_width: int = Form(DEFAULT_OUTPUT_WIDTH),
-    output_height: int = Form(DEFAULT_OUTPUT_HEIGHT),
-):
-    try:
-        if not files:
-            return JSONResponse(status_code=400, content={"error": "Nenhum arquivo enviado."})
-
-        if len(files) > MAX_FILES_PER_BATCH:
-            return JSONResponse(
-                status_code=400,
-                content={"error": f"Envie no máximo {MAX_FILES_PER_BATCH} imagens por vez."},
-            )
-
-        output_format, background_mode, output_width, output_height = normalize_output_options(
-            output_format=output_format,
-            background_mode=background_mode,
-            output_width=output_width,
-            output_height=output_height,
-        )
-
-        batch_id = uuid.uuid4().hex[:12]
-        batch_dir = BATCHES_DIR / batch_id
-        batch_dir.mkdir(parents=True, exist_ok=True)
-
-        valid_ext = {".jpg", ".jpeg", ".png", ".webp"}
-        processed_items = []
-
-        for file in files:
-            ext = Path(file.filename).suffix.lower()
-            if ext not in valid_ext:
-                continue
-
-            raw = await file.read()
-            if not raw:
-                continue
-
-            original_base_name = safe_stem(file.filename)
-            image_id = uuid.uuid4().hex[:10]
-            item_dir = batch_dir / image_id
-            item_dir.mkdir(parents=True, exist_ok=True)
-
-            isolated_rgba = remove_background(raw)
-
-            isolated_path = item_dir / f"{original_base_name}_isolated.png"
-            isolated_rgba.save(isolated_path)
-
-            alpha_mask = isolated_rgba.getchannel("A").convert("L")
-            mask_path = item_dir / f"{original_base_name}_mask.png"
-            alpha_mask.save(mask_path)
-
-            final_bytes, final_ext, media_type = compose_output_image(
-                isolated_rgba=isolated_rgba,
-                output_width=output_width,
-                output_height=output_height,
-                margin_percent=margin_percent,
-                output_format=output_format,
-                background_mode=background_mode,
-                jpeg_quality=jpeg_quality,
-            )
-
-            output_filename = f"{original_base_name}_{output_width}x{output_height}.{final_ext}"
-            output_path = item_dir / output_filename
-            output_path.write_bytes(final_bytes)
-
-            processed_items.append(
-                {
-                    "image_id": image_id,
-                    "filename": file.filename,
-                    "display_name": output_filename,
-                    "output_filename": output_filename,
-                    "preview_url": media_url(output_path),
-                    "download_url": f"/download/image/{batch_id}/{image_id}",
-                    "isolated_url": media_url(isolated_path),
-                    "mask_url": media_url(mask_path),
-                    "save_url": f"/api/save-edited/{batch_id}/{image_id}",
-                    "rename_url": f"/api/rename-image/{batch_id}/{image_id}",
-                    "output_format": final_ext,
-                    "background_mode": background_mode,
-                    "output_width": output_width,
-                    "output_height": output_height,
-                    "media_type": media_type,
-                }
-            )
-
-        if not processed_items:
-            return JSONResponse(
-                status_code=400,
-                content={"error": "Nenhuma imagem válida foi processada."},
-            )
-
-        meta = {
-            "batch_id": batch_id,
-            "count": len(processed_items),
-            "items": processed_items,
-            "output_format": output_format,
-            "background_mode": background_mode,
-            "output_width": output_width,
-            "output_height": output_height,
-        }
-        save_batch_meta(batch_dir, meta)
-
-        return {
-            "success": True,
-            "batch_id": batch_id,
-            "count": len(processed_items),
-            "zip_url": f"/download/zip/{batch_id}",
-            "items": processed_items,
-            "output_format": output_format,
-            "background_mode": background_mode,
-            "output_width": output_width,
-            "output_height": output_height,
-        }
-
-    except Exception as exc:
-        print("Erro em /api/process-batch")
-        print(traceback.format_exc())
-        return JSONResponse(
-            status_code=500,
-            content={"error": f"Erro interno no processamento: {str(exc)}"},
-        )
-
-
-@app.post("/api/save-edited/{batch_id}/{image_id}")
-async def save_edited(batch_id: str, image_id: str, payload: SaveEditedPayload):
-    try:
-        batch_dir = BATCHES_DIR / batch_id
-        if not batch_dir.exists():
-            raise HTTPException(status_code=404, detail="Lote não encontrado.")
-
-        item_dir = batch_dir / image_id
-        if not item_dir.exists():
-            raise HTTPException(status_code=404, detail="Imagem não encontrada.")
-
-        existing_files = list(item_dir.glob("*.jpg")) + list(item_dir.glob("*.jpeg")) + list(item_dir.glob("*.png"))
-        if not existing_files:
-            raise HTTPException(status_code=404, detail="Arquivo final não encontrado.")
-
-        file_path = existing_files[0]
-        raw = decode_data_url(payload.data_url)
-        ext = file_path.suffix.lower()
-
-        if ext == ".png":
-            img = Image.open(BytesIO(raw)).convert("RGBA")
-            img.save(file_path, format="PNG", optimize=True)
-            media_type = "image/png"
-        else:
-            img = Image.open(BytesIO(raw)).convert("RGB")
-            img.save(file_path, format="JPEG", quality=95, optimize=True)
-            media_type = "image/jpeg"
-
-        return {
-            "success": True,
-            "preview_url": media_url(file_path),
-            "download_url": f"/download/image/{batch_id}/{image_id}",
-            "media_type": media_type,
-        }
-
-    except Exception as exc:
-        print("Erro em /api/save-edited")
-        print(traceback.format_exc())
-        return JSONResponse(
-            status_code=500,
-            content={"error": f"Falha ao salvar a imagem editada: {str(exc)}"},
-        )
-
-
-@app.post("/api/rename-image/{batch_id}/{image_id}")
-async def rename_image(batch_id: str, image_id: str, payload: RenameImagePayload):
-    try:
-        batch_dir = BATCHES_DIR / batch_id
-        if not batch_dir.exists():
-            raise HTTPException(status_code=404, detail="Lote não encontrado.")
-
-        item_dir = batch_dir / image_id
-        if not item_dir.exists():
-            raise HTTPException(status_code=404, detail="Imagem não encontrada.")
-
-        files = list(item_dir.glob("*.jpg")) + list(item_dir.glob("*.jpeg")) + list(item_dir.glob("*.png"))
-        if not files:
-            raise HTTPException(status_code=404, detail="Arquivo final não encontrado.")
-
-        old_file = files[0]
-        ext = old_file.suffix.lower()
-        base_name = safe_filename_base(payload.new_name)
-        new_file_name = f"{base_name}{ext}"
-        new_file = item_dir / new_file_name
-
-        if old_file.name != new_file.name:
-            old_file.rename(new_file)
-
-        meta = load_batch_meta(batch_dir)
-        items = meta.get("items", [])
-        for item in items:
-            if item.get("image_id") == image_id:
-                item["display_name"] = new_file_name
-                item["output_filename"] = new_file_name
-                item["preview_url"] = media_url(new_file)
-                item["download_url"] = f"/download/image/{batch_id}/{image_id}"
-                break
-        if meta:
-            save_batch_meta(batch_dir, meta)
-
-        return {
-            "success": True,
-            "display_name": new_file_name,
-            "output_filename": new_file_name,
-            "preview_url": media_url(new_file),
-            "download_url": f"/download/image/{batch_id}/{image_id}",
-        }
-
-    except Exception as exc:
-        print("Erro em /api/rename-image")
-        print(traceback.format_exc())
-        return JSONResponse(
-            status_code=500,
-            content={"error": f"Falha ao renomear o arquivo: {str(exc)}"},
-        )
-
-
-@app.get("/download/image/{batch_id}/{image_id}")
-def download_image(batch_id: str, image_id: str):
-    batch_dir = BATCHES_DIR / batch_id
-    if not batch_dir.exists():
-        raise HTTPException(status_code=404, detail="Lote não encontrado.")
-
-    item_dir = batch_dir / image_id
-    if not item_dir.exists():
-        raise HTTPException(status_code=404, detail="Imagem não encontrada.")
-
-    files = list(item_dir.glob("*.jpg")) + list(item_dir.glob("*.jpeg")) + list(item_dir.glob("*.png"))
-    if not files:
-        raise HTTPException(status_code=404, detail="Arquivo final não encontrado.")
-
-    file_path = files[0]
-    ext = file_path.suffix.lower()
-    media_type = "image/png" if ext == ".png" else "image/jpeg"
-
-    return FileResponse(
-        path=file_path,
-        media_type=media_type,
-        filename=file_path.name,
-    )
-
-
-@app.get("/download/zip/{batch_id}")
-def download_zip(batch_id: str):
-    batch_dir = BATCHES_DIR / batch_id
-    if not batch_dir.exists():
-        raise HTTPException(status_code=404, detail="Lote não encontrado.")
-
-    zip_path = batch_dir / f"photopeg-lote-{batch_id}.zip"
-
-    with ZipFile(zip_path, "w", ZIP_DEFLATED) as zipf:
-        for item_dir in sorted(batch_dir.iterdir()):
-            if not item_dir.is_dir():
-                continue
-            for final_file in list(item_dir.glob("*.jpg")) + list(item_dir.glob("*.jpeg")) + list(item_dir.glob("*.png")):
-                zipf.write(final_file, arcname=final_file.name)
-
-    return FileResponse(
-        path=zip_path,
-        media_type="application/zip",
-        filename=f"photopeg-lote-{batch_id}.zip",
-    )
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Arial, Helvetica, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(54, 115, 255, 0.16), transparent 25%),
+        radial-gradient(circle at top right, rgba(80, 184, 255, 0.10), transparent 20%),
+        linear-gradient(180deg, #050d18 0%, #07111f 45%, #08111c 100%);
+      padding: 24px;
+    }
+
+    .shell {
+      width: 100%;
+      max-width: 1240px;
+      margin: 0 auto;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-xl);
+      background: linear-gradient(180deg, rgba(10, 20, 36, 0.96), rgba(8, 16, 29, 0.96));
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .card-inner {
+      padding: 38px 30px;
+      display: grid;
+      gap: 24px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .brand-logo {
+      width: 170px;
+      max-width: 100%;
+      height: auto;
+      display: block;
+      transition: var(--transition);
+    }
+
+    .brand-text {
+      text-align: left;
+    }
+
+    .brand-text h1 {
+      margin: 0;
+      font-size: 42px;
+      line-height: 1;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+    }
+
+    .brand-text p {
+      margin: 10px 0 0;
+      font-size: 18px;
+      color: var(--muted);
+    }
+
+    .upload-box,
+    .status-box,
+    .result-box,
+    .gallery-box,
+    .editor-panel,
+    .intro-card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      background: linear-gradient(180deg, rgba(16, 31, 54, 0.86), rgba(11, 21, 37, 0.86));
+      transition: var(--transition);
+    }
+
+    .intro-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 14000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background:
+        radial-gradient(circle at top left, rgba(54, 115, 255, 0.22), transparent 25%),
+        radial-gradient(circle at bottom right, rgba(80, 184, 255, 0.18), transparent 30%),
+        rgba(3, 10, 21, 0.94);
+      backdrop-filter: blur(14px);
+      transition: opacity 0.45s ease, visibility 0.45s ease;
+    }
+
+    .intro-overlay.hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .intro-card {
+      width: min(760px, 100%);
+      padding: 34px;
+      text-align: center;
+      box-shadow: 0 25px 80px rgba(0,0,0,0.45);
+      display: grid;
+      gap: 18px;
+    }
+
+    .intro-logo {
+      width: 210px;
+      margin: 0 auto;
+      display: block;
+    }
+
+    .intro-title {
+      margin: 0;
+      font-size: 38px;
+      font-weight: 900;
+      letter-spacing: -0.03em;
+    }
+
+    .intro-text {
+      margin: 0;
+      font-size: 15px;
+      line-height: 1.6;
+      color: var(--muted);
+    }
+
+    .intro-loading-wrap {
+      display: grid;
+      gap: 10px;
+      margin-top: 8px;
+    }
+
+    .intro-loading-bar {
+      width: 100%;
+      height: 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.08);
+      overflow: hidden;
+    }
+
+    .intro-loading-fill {
+      width: 0%;
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--blue-1), var(--blue-2), var(--blue-3));
+      transition: width 0.15s linear;
+    }
+
+    .intro-loading-meta {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 13px;
+      color: #eaf1ff;
+      font-weight: 700;
+    }
+
+    .intro-steps {
+      display: grid;
+      gap: 8px;
+      margin-top: 4px;
+    }
+
+    .intro-step {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.05);
+      background: rgba(255,255,255,0.03);
+    }
+
+    .intro-step-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .intro-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.15);
+    }
+
+    .intro-step.active .intro-dot { background: var(--blue-2); }
+    .intro-step.done .intro-dot { background: var(--green); }
+    .intro-step-status {
+      font-size: 11px;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 800;
+    }
+
+    .upload-box {
+      padding: 28px;
+      display: grid;
+      gap: 18px;
+      justify-items: center;
+      text-align: center;
+    }
+
+    .drop-zone {
+      width: 100%;
+      max-width: 760px;
+      border: 1px dashed rgba(122,182,255,0.35);
+      border-radius: 18px;
+      padding: 26px 18px;
+      background: rgba(255,255,255,0.03);
+      transition: var(--transition);
+      display: grid;
+      gap: 14px;
+      justify-items: center;
+    }
+
+    .drop-zone.dragover {
+      border-color: rgba(122,182,255,0.7);
+      box-shadow: var(--neon);
+      background: rgba(122,182,255,0.06);
+      transform: translateY(-1px);
+    }
+
+    .upload-title {
+      font-size: 24px;
+      font-weight: 800;
+      margin: 0;
+    }
+
+    .upload-subtitle {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.5;
+      max-width: 620px;
+    }
+
+    .file-picker {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 280px;
+      min-height: 60px;
+      border-radius: 16px;
+      border: 1px solid rgba(122,182,255,0.35);
+      background: linear-gradient(135deg, var(--blue-1), var(--blue-2), var(--blue-3));
+      color: #fff;
+      font-size: 16px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: var(--transition);
+      box-shadow: 0 10px 28px rgba(46, 108, 255, 0.22);
+      gap: 10px;
+      padding: 0 24px;
+    }
+
+    .file-picker input {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+    }
+
+    .file-name {
+      font-size: 14px;
+      color: var(--muted);
+      min-height: 20px;
+      text-align: center;
+      word-break: break-word;
+    }
+
+    .info-list {
+      display: grid;
+      gap: 12px;
+      width: 100%;
+      max-width: 760px;
+      padding: 14px 16px;
+      border-radius: 16px;
+      border: 1px solid rgba(130, 166, 255, 0.12);
+      background: rgba(255,255,255,0.03);
+      text-align: left;
+      color: #dce7ff;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .config-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .field {
+      display: grid;
+      gap: 6px;
+    }
+
+    .field label {
+      font-size: 12px;
+      font-weight: 700;
+      color: #dce7ff;
+    }
+
+    .field input,
+    .field select {
+      min-height: 44px;
+      width: 100%;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.04);
+      color: #f3f7ff;
+      padding: 0 12px;
+      font-size: 14px;
+      outline: none;
+    }
+
+    .field select {
+      color-scheme: dark;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+
+    .field select option {
+      color: #000000;
+      background-color: #ffffff;
+    }
+
+    .actions,
+    .result-actions,
+    .editor-actions,
+    .tool-tabs {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      border: 0;
+      border-radius: 14px;
+      padding: 13px 20px;
+      font-size: 14px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: var(--transition);
+      min-height: 46px;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .btn-primary {
+      color: #fff;
+      background: linear-gradient(135deg, var(--blue-1), var(--blue-2), var(--blue-3));
+    }
+
+    .btn-secondary {
+      color: #dce7ff;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .btn-success {
+      color: #fff;
+      background: linear-gradient(135deg, #13975d, var(--green));
+    }
+
+    .btn-danger {
+      color: #fff;
+      background: linear-gradient(135deg, #d1425d, var(--danger));
+    }
+
+    .status-box,
+    .result-box {
+      padding: 16px 18px;
+      color: #dbe6ff;
+      white-space: pre-line;
+    }
+
+    .result-box {
+      display: none;
+      gap: 14px;
+    }
+
+    .result-box.active {
+      display: grid;
+    }
+
+    .gallery-box {
+      display: none;
+      padding: 18px;
+    }
+
+    .gallery-box.active {
+      display: block;
+    }
+
+    .gallery-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 14px;
+    }
+
+    .gallery-card {
+      border: 1px solid rgba(130, 166, 255, 0.12);
+      border-radius: 16px;
+      background: rgba(255,255,255,0.03);
+      padding: 12px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .gallery-name {
+      font-size: 13px;
+      font-weight: 700;
+      color: #e7efff;
+      word-break: break-word;
+    }
+
+    .gallery-meta {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+
+    .gallery-rename {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+    }
+
+    .gallery-rename input {
+      min-height: 40px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.04);
+      color: #f3f7ff;
+      padding: 0 10px;
+    }
+
+    .gallery-preview {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      border-radius: 12px;
+      overflow: hidden;
+      background:
+        linear-gradient(45deg, #f2f5fb 25%, #ffffff 25%, #ffffff 50%, #f2f5fb 50%, #f2f5fb 75%, #ffffff 75%, #ffffff 100%);
+      background-size: 20px 20px;
+      border: 1px solid rgba(255,255,255,0.06);
+      cursor: pointer;
+    }
+
+    .gallery-preview.transparent-bg {
+      background:
+        linear-gradient(45deg, #dfe3ea 25%, #f8f8f8 25%, #f8f8f8 50%, #dfe3ea 50%, #dfe3ea 75%, #f8f8f8 75%, #f8f8f8 100%);
+      background-size: 20px 20px;
+    }
+
+    .gallery-preview img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+
+    .editor-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 12000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: rgba(2, 8, 18, 0.88);
+      backdrop-filter: blur(12px);
+    }
+
+    .editor-modal.active {
+      display: flex;
+    }
+
+    .editor-shell {
+      width: min(1680px, 100%);
+      height: 94vh;
+      overflow: hidden;
+      border-radius: 22px;
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(10, 20, 36, 0.98), rgba(8, 16, 29, 0.98));
+      box-shadow: 0 28px 80px rgba(0,0,0,0.45);
+      padding: 18px;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      gap: 16px;
+    }
+
+    .editor-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .editor-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 390px;
+      gap: 16px;
+      align-items: stretch;
+      min-height: 0;
+    }
+
+    .editor-canvas-wrap {
+      padding: 14px;
+      min-height: 0;
+      display: flex;
+    }
+
+    .canvas-stage {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: auto;
+      border-radius: 14px;
+      background: #dfe1e5;
+      border: 1px solid rgba(255,255,255,0.06);
+      padding: 28px;
+    }
+
+    .canvas-stage.transparent-bg {
+      background:
+        linear-gradient(45deg, #dfe3ea 25%, #f8f8f8 25%, #f8f8f8 50%, #dfe3ea 50%, #dfe3ea 75%, #f8f8f8 75%, #f8f8f8 100%);
+      background-size: 24px 24px;
+    }
+
+    .canvas-viewport {
+      width: 100%;
+      height: 100%;
+      min-width: 900px;
+      min-height: 900px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transform-origin: center center;
+      transition: transform 0.18s ease;
+    }
+
+    #editorCanvas {
+      display: block;
+      cursor: crosshair;
+      background: transparent;
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.06);
+    }
+
+    .editor-sidebar {
+      display: grid;
+      gap: 14px;
+      align-content: start;
+      max-height: 100%;
+      overflow: auto;
+      padding-right: 4px;
+    }
+
+    .editor-panel {
+      padding: 14px;
+    }
+
+    .panel-title {
+      margin: 0 0 12px;
+      font-size: 16px;
+      font-weight: 800;
+    }
+
+    .slider-group {
+      display: grid;
+      gap: 10px;
+    }
+
+    .field-inline {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .slider-wrap {
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 14px;
+      padding: 10px 12px;
+      background: rgba(255,255,255,0.03);
+    }
+
+    .slider-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .slider-value {
+      color: #eaf1ff;
+      font-weight: 700;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      appearance: none;
+      background: transparent;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-runnable-track {
+      height: 6px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--blue-1), var(--blue-2), var(--blue-3));
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #fff;
+      border: 3px solid var(--blue-2);
+      margin-top: -6px;
+      box-shadow: 0 0 0 4px rgba(77,137,255,0.15);
+    }
+
+    .editor-note {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .loading-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 11000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      background: rgba(2, 8, 18, 0.84);
+      backdrop-filter: blur(10px);
+    }
+
+    .loading-overlay.active {
+      display: flex;
+    }
+
+    .loading-card {
+      width: min(620px, 100%);
+      border-radius: 22px;
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(11, 21, 36, 0.98), rgba(8, 15, 27, 0.98));
+      box-shadow: 0 28px 80px rgba(0,0,0,0.45);
+      padding: 22px;
+    }
+
+    .loading-title {
+      margin: 0 0 6px;
+      font-size: 22px;
+      font-weight: 800;
+    }
+
+    .loading-subtitle {
+      margin: 0 0 16px;
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .loading-progress-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #e6efff;
+    }
+
+    .loading-bar {
+      width: 100%;
+      height: 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.08);
+      overflow: hidden;
+      margin-bottom: 16px;
+    }
+
+    .loading-bar-fill {
+      width: 0%;
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--blue-1), var(--blue-2), var(--blue-3));
+      transition: width 0.25s ease;
+    }
+
+    .loading-steps {
+      display: grid;
+      gap: 8px;
+    }
+
+    .loading-step {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 11px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.05);
+      background: rgba(255,255,255,0.02);
+    }
+
+    .loading-step-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .loading-step-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.14);
+      flex: 0 0 10px;
+    }
+
+    .loading-step.active .loading-step-dot { background: var(--blue-2); }
+    .loading-step.done .loading-step-dot { background: var(--green); }
+
+    .loading-step-status {
+      font-size: 11px;
+      color: var(--muted);
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    @media (max-width: 1100px) {
+      .editor-layout { grid-template-columns: 1fr; }
+      .editor-shell { height: auto; max-height: 94vh; overflow: auto; }
+      .canvas-stage { min-height: 520px; }
+      .canvas-viewport { min-width: 700px; min-height: 700px; }
+    }
+
+    @media (max-width: 760px) {
+      body { padding: 14px; }
+      .card-inner { padding: 28px 18px; }
+      .brand { justify-content: center; text-align: center; }
+      .brand-text { text-align: center; }
+      .brand-text h1 { font-size: 34px; }
+      .brand-text p { font-size: 16px; }
+      .intro-card { padding: 24px 18px; }
+      .intro-title { font-size: 30px; }
+      .actions, .result-actions, .editor-actions, .tool-tabs { flex-direction: column; }
+      .btn { width: 100%; }
+      .config-grid, .field-inline { grid-template-columns: 1fr; }
+      .canvas-stage { min-height: 420px; padding: 8px; }
+      .canvas-viewport { min-width: 560px; min-height: 560px; }
+      .gallery-rename { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div id="introOverlay" class="intro-overlay">
+    <div class="intro-card">
+      <img
+        class="intro-logo"
+        src="https://raw.githubusercontent.com/Pegdobrasil/peg-imagens-site/refs/heads/main/logo%20png%20branca.png"
+        alt="PEG do Brasil"
+      />
+      <h1 class="intro-title">Bem-vindo ao PhotoPEG Studio</h1>
+      <p class="intro-text">
+        Preparando o ambiente de edição em lote para padronizar suas imagens.
+      </p>
+
+      <div class="intro-loading-wrap">
+        <div class="intro-loading-meta">
+          <span id="introLoadingLabel">Inicializando interface...</span>
+          <span id="introLoadingPercent">0%</span>
+        </div>
+        <div class="intro-loading-bar">
+          <div id="introLoadingFill" class="intro-loading-fill"></div>
+        </div>
+      </div>
+
+      <div class="intro-steps">
+        <div class="intro-step" data-step="1">
+          <div class="intro-step-left"><span class="intro-dot"></span><span>Carregando interface</span></div>
+          <span class="intro-step-status">aguardando</span>
+        </div>
+        <div class="intro-step" data-step="2">
+          <div class="intro-step-left"><span class="intro-dot"></span><span>Preparando editor</span></div>
+          <span class="intro-step-status">aguardando</span>
+        </div>
+        <div class="intro-step" data-step="3">
+          <div class="intro-step-left"><span class="intro-dot"></span><span>Aplicando configurações</span></div>
+          <span class="intro-step-status">aguardando</span>
+        </div>
+        <div class="intro-step" data-step="4">
+          <div class="intro-step-left"><span class="intro-dot"></span><span>Finalizando ambiente</span></div>
+          <span class="intro-step-status">aguardando</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="shell">
+    <div class="card">
+      <div class="card-inner">
+        <div class="brand">
+          <img
+            class="brand-logo"
+            src="https://raw.githubusercontent.com/Pegdobrasil/peg-imagens-site/refs/heads/main/logo%20png%20branca.png"
+            alt="PEG do Brasil"
+          />
+          <div class="brand-text">
+            <h1>PhotoPEG Studio</h1>
+            <p>Movimente o elemento e renomeie o arquivo</p>
+          </div>
+        </div>
+
+        <form id="uploadForm" class="upload-box">
+          <div class="drop-zone" id="dropZone">
+            <h2 class="upload-title">Escolha os ficheiros</h2>
+            <p class="upload-subtitle">
+              Selecione ou arraste até 50 imagens para processar em lote.
+            </p>
+
+            <label class="file-picker">
+              <span>Escolher ficheiros</span>
+              <input
+                id="files"
+                type="file"
+                name="files"
+                accept=".jpg,.jpeg,.png,.webp"
+                multiple
+                required
+              />
+            </label>
+
+            <div>Arraste e solte as imagens aqui</div>
+          </div>
+
+          <div id="fileName" class="file-name">Nenhum ficheiro selecionado</div>
+
+          <div class="info-list">
+            <div class="config-grid">
+              <div class="field">
+                <label for="outputWidth">Largura</label>
+                <input id="outputWidth" type="number" min="100" max="5000" value="1000" inputmode="numeric">
+              </div>
+
+              <div class="field">
+                <label for="outputHeight">Altura</label>
+                <input id="outputHeight" type="number" min="100" max="5000" value="1000" inputmode="numeric">
+              </div>
+
+              <div class="field">
+                <label for="outputFormat">Formato</label>
+                <select id="outputFormat">
+                  <option value="jpg">JPG</option>
+                  <option value="jpeg">JPEG</option>
+                  <option value="png" selected>PNG</option>
+                </select>
+              </div>
+
+              <div class="field">
+                <label for="backgroundMode">Fundo</label>
+                <select id="backgroundMode">
+                  <option value="white" selected>Branco</option>
+                  <option value="transparent">Transparente</option>
+                </select>
+              </div>
+            </div>
+
+            <div>• PNG pode usar fundo branco ou transparente</div>
+            <div>• JPG e JPEG usam fundo branco</div>
+            <div>• No editor você pode mover o elemento por X e Y</div>
+            <div>• Também é possível renomear o arquivo</div>
+          </div>
+
+          <div class="actions">
+            <button id="submitBtn" class="btn btn-primary" type="submit">Processar lote</button>
+            <button id="clearBtn" class="btn btn-secondary" type="button">Limpar</button>
+          </div>
+        </form>
+
+        <div class="status-box" id="status">Aguardando envio das imagens.</div>
+
+        <div id="resultBox" class="result-box">
+          <div>Lote processado</div>
+          <div id="resultText">Seu lote foi concluído com sucesso.</div>
+          <div class="result-actions">
+            <a id="zipDownloadBtn" class="btn btn-success" href="#" target="_blank" rel="noopener noreferrer">Baixar ZIP</a>
+          </div>
+        </div>
+
+        <div id="galleryBox" class="gallery-box">
+          <div>Imagens processadas</div>
+          <div>Clique no card para editar ou renomeie o arquivo antes de baixar.</div>
+          <div id="galleryGrid" class="gallery-grid"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="editorModal" class="editor-modal">
+    <div class="editor-shell">
+      <div class="editor-top">
+        <h3 class="editor-title" id="editorTitle">Editor da imagem</h3>
+        <div class="editor-actions">
+          <button id="undoBtn" class="btn btn-secondary" type="button">Desfazer</button>
+          <button id="redoBtn" class="btn btn-secondary" type="button">Refazer</button>
+          <button id="resetBtn" class="btn btn-secondary" type="button">Resetar</button>
+          <button id="saveBtn" class="btn btn-success" type="button">Salvar edição</button>
+          <button id="closeEditorBtn" class="btn btn-danger" type="button">Fechar</button>
+        </div>
+      </div>
+
+      <div class="editor-layout">
+        <div class="editor-panel editor-canvas-wrap">
+          <div class="canvas-stage" id="canvasStage">
+            <div class="canvas-viewport" id="canvasViewport">
+              <canvas id="editorCanvas" width="1000" height="1000"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <div class="editor-sidebar">
+          <div class="editor-panel">
+            <div class="panel-title">Arquivo</div>
+            <div class="slider-group">
+              <div class="field">
+                <label for="editorFileName">Nome do arquivo</label>
+                <input id="editorFileName" type="text" value="imagem">
+              </div>
+              <button id="renameInEditorBtn" class="btn btn-secondary" type="button">Renomear arquivo</button>
+            </div>
+          </div>
+
+          <div class="editor-panel">
+            <div class="panel-title">Ferramentas</div>
+            <div class="tool-tabs">
+              <button class="btn btn-primary tool-mode" data-mode="view" type="button">Visualizar</button>
+              <button class="btn btn-secondary tool-mode" data-mode="retouch" type="button">Retocar</button>
+              <button class="btn btn-secondary tool-mode" data-mode="erase" type="button">Editar contorno</button>
+              <button class="btn btn-secondary tool-mode" data-mode="restore" type="button">Restaurar contorno</button>
+            </div>
+            <p class="editor-note">
+              Use os controles de posição para mover o elemento dentro da arte final.
+            </p>
+          </div>
+
+          <div class="editor-panel">
+            <div class="panel-title">Saída e posição</div>
+            <div class="slider-group">
+              <div class="field-inline">
+                <div class="field">
+                  <label for="editorOutputWidth">Largura</label>
+                  <input id="editorOutputWidth" type="number" min="100" max="5000" value="1000" inputmode="numeric">
+                </div>
+                <div class="field">
+                  <label for="editorOutputHeight">Altura</label>
+                  <input id="editorOutputHeight" type="number" min="100" max="5000" value="1000" inputmode="numeric">
+                </div>
+              </div>
+
+              <div class="field-inline">
+                <div class="field">
+                  <label for="editorOutputFormat">Formato</label>
+                  <select id="editorOutputFormat">
+                    <option value="jpg">JPG</option>
+                    <option value="jpeg">JPEG</option>
+                    <option value="png">PNG</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="editorBackgroundMode">Fundo</label>
+                  <select id="editorBackgroundMode">
+                    <option value="white">Branco</option>
+                    <option value="transparent">Transparente</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="field">
+                <label for="viewZoomRange">Zoom da janela (%)</label>
+                <div class="slider-wrap">
+                  <div class="slider-head"><span>Visualização</span><span class="slider-value" id="viewZoomRangeValue">58%</span></div>
+                  <input id="viewZoomRange" type="range" min="35" max="100" value="58">
+                </div>
+              </div>
+
+              <div class="field">
+                <label for="zoomRange">Zoom da foto (%)</label>
+                <div class="slider-wrap">
+                  <div class="slider-head"><span>Foto</span><span class="slider-value" id="zoomRangeValue">100%</span></div>
+                  <input id="zoomRange" type="range" min="40" max="180" value="100">
+                </div>
+              </div>
+
+              <div class="field">
+                <label for="posXRange">Posição X</label>
+                <div class="slider-wrap">
+                  <div class="slider-head"><span>Horizontal</span><span class="slider-value" id="posXRangeValue">0</span></div>
+                  <input id="posXRange" type="range" min="-500" max="500" value="0">
+                </div>
+              </div>
+
+              <div class="field">
+                <label for="posYRange">Posição Y</label>
+                <div class="slider-wrap">
+                  <div class="slider-head"><span>Vertical</span><span class="slider-value" id="posYRangeValue">0</span></div>
+                  <input id="posYRange" type="range" min="-500" max="500" value="0">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="editor-panel">
+            <div class="panel-title">Ajustes de imagem</div>
+            <div class="slider-group">
+              <div class="field">
+                <label for="lightRange">Luz</label>
+                <div class="slider-wrap">
+                  <div class="slider-head"><span>Ajuste</span><span class="slider-value" id="lightRangeValue">0</span></div>
+                  <input id="lightRange" type="range" min="-100" max="100" value="0">
+                </div>
+              </div>
+
+              <div class="field">
+                <label for="brightnessRange">Brilho</label>
+                <div class="slider-wrap">
+                  <div class="slider-head"><span>Ajuste</span><span class="slider-value" id="brightnessRangeValue">0</span></div>
+                  <input id="brightnessRange" type="range" min="-100" max="100" value="0">
+                </div>
+              </div>
+
+              <div class="field">
+                <label for="contrastRange">Contraste</label>
+                <div class="slider-wrap">
+                  <div class="slider-head"><span>Ajuste</span><span class="slider-value" id="contrastRangeValue">0</span></div>
+                  <input id="contrastRange" type="range" min="-100" max="100" value="0">
+                </div>
+              </div>
+
+              <div class="field">
+                <label for="temperatureRange">Temperatura</label>
+                <div class="slider-wrap">
+                  <div class="slider-head"><span>Ajuste</span><span class="slider-value" id="temperatureRangeValue">0</span></div>
+                  <input id="temperatureRange" type="range" min="-100" max="100" value="0">
+                </div>
+              </div>
+
+              <div class="field">
+                <label for="sharpnessRange">Nitidez</label>
+                <div class="slider-wrap">
+                  <div class="slider-head"><span>Ajuste</span><span class="slider-value" id="sharpnessRangeValue">0</span></div>
+                  <input id="sharpnessRange" type="range" min="0" max="100" value="0">
+                </div>
+              </div>
+
+              <div class="field">
+                <label for="brushRange">Tamanho do pincel</label>
+                <div class="slider-wrap">
+                  <div class="slider-head"><span>Pincel</span><span class="slider-value" id="brushRangeValue">30</span></div>
+                  <input id="brushRange" type="range" min="5" max="120" value="30">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="editor-panel">
+            <div class="panel-title">Ações</div>
+            <div class="editor-actions">
+              <a id="editorDownloadBtn" class="btn btn-success" href="#" target="_blank" rel="noopener noreferrer">Baixar arquivo</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="loadingOverlay" class="loading-overlay">
+    <div class="loading-card">
+      <h2 class="loading-title">Processando imagens</h2>
+      <p class="loading-subtitle" id="loadingSubtitle">Aguarde enquanto o sistema envia e prepara o lote.</p>
+
+      <div class="loading-progress-top">
+        <span id="loadingCurrentStep">Preparando lote...</span>
+        <span id="loadingPercent">0%</span>
+      </div>
+
+      <div class="loading-bar">
+        <div id="loadingBarFill" class="loading-bar-fill"></div>
+      </div>
+
+      <div class="loading-steps">
+        <div class="loading-step" data-step="1">
+          <div class="loading-step-left"><span class="loading-step-dot"></span><span>Separando arquivos</span></div>
+          <span class="loading-step-status">aguardando</span>
+        </div>
+        <div class="loading-step" data-step="2">
+          <div class="loading-step-left"><span class="loading-step-dot"></span><span>Enviando ao servidor</span></div>
+          <span class="loading-step-status">aguardando</span>
+        </div>
+        <div class="loading-step" data-step="3">
+          <div class="loading-step-left"><span class="loading-step-dot"></span><span>Removendo fundo</span></div>
+          <span class="loading-step-status">aguardando</span>
+        </div>
+        <div class="loading-step" data-step="4">
+          <div class="loading-step-left"><span class="loading-step-dot"></span><span>Gerando arquivo final</span></div>
+          <span class="loading-step-status">aguardando</span>
+        </div>
+        <div class="loading-step" data-step="5">
+          <div class="loading-step-left"><span class="loading-step-dot"></span><span>Finalizando ZIP</span></div>
+          <span class="loading-step-status">aguardando</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js?v=18"></script>
+</body>
+</html>
