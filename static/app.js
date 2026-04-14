@@ -9,6 +9,9 @@ const resultBox = document.getElementById("resultBox");
 const resultText = document.getElementById("resultText");
 const zipDownloadBtn = document.getElementById("zipDownloadBtn");
 
+const galleryBox = document.getElementById("galleryBox");
+const galleryGrid = document.getElementById("galleryGrid");
+
 const loadingOverlay = document.getElementById("loadingOverlay");
 const loadingSubtitle = document.getElementById("loadingSubtitle");
 const loadingCurrentStep = document.getElementById("loadingCurrentStep");
@@ -174,6 +177,29 @@ function xhrPostJson(url, formData, onUploadProgress) {
 function resetResult() {
   resultBox.classList.remove("active");
   zipDownloadBtn.href = "#";
+  galleryBox.classList.remove("active");
+  galleryGrid.innerHTML = "";
+}
+
+function renderGallery(items) {
+  galleryGrid.innerHTML = "";
+
+  items.forEach((item) => {
+    const card = document.createElement("div");
+    card.className = "gallery-card";
+
+    card.innerHTML = `
+      <div class="gallery-name">${item.filename}</div>
+      <div class="gallery-preview">
+        <img src="${item.preview_url}" alt="${item.filename}">
+      </div>
+      <a class="btn btn-success" href="${item.download_url}" target="_blank" rel="noopener noreferrer">Baixar JPG</a>
+    `;
+
+    galleryGrid.appendChild(card);
+  });
+
+  galleryBox.classList.add("active");
 }
 
 filesInput.addEventListener("change", () => {
@@ -230,11 +256,14 @@ form.addEventListener("submit", async (event) => {
     });
 
     finishLoadingSuccess();
-    setStatus(`Concluído.\nImagens processadas: ${data.count}\nFormato final: JPG\nFundo: branco\nTamanho: 1000x1000 px`);
+    setStatus(
+      `Concluído.\nImagens processadas: ${data.count}\nFormato final: JPG\nFundo: branco\nTamanho: 1000x1000 px`
+    );
 
     resultText.textContent = `Lote concluído com ${data.count} imagem(ns).`;
     zipDownloadBtn.href = data.zip_url;
     resultBox.classList.add("active");
+    renderGallery(data.items || []);
   } catch (error) {
     finishLoadingError(error.message);
     setStatus(error.message || "Falha ao processar o lote.");
