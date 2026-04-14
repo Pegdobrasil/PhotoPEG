@@ -32,9 +32,11 @@ const editorDownloadBtn = document.getElementById("editorDownloadBtn");
 
 const editorCanvas = document.getElementById("editorCanvas");
 const editorCtx = editorCanvas.getContext("2d");
+const canvasViewport = document.getElementById("canvasViewport");
 
 const toolModeButtons = Array.from(document.querySelectorAll(".tool-mode"));
 
+const viewZoomRange = document.getElementById("viewZoomRange");
 const zoomRange = document.getElementById("zoomRange");
 const lightRange = document.getElementById("lightRange");
 const brightnessRange = document.getElementById("brightnessRange");
@@ -43,6 +45,7 @@ const temperatureRange = document.getElementById("temperatureRange");
 const sharpnessRange = document.getElementById("sharpnessRange");
 const brushRange = document.getElementById("brushRange");
 
+const viewZoomRangeValue = document.getElementById("viewZoomRangeValue");
 const zoomRangeValue = document.getElementById("zoomRangeValue");
 const lightRangeValue = document.getElementById("lightRangeValue");
 const brightnessRangeValue = document.getElementById("brightnessRangeValue");
@@ -318,7 +321,13 @@ function setToolMode(mode) {
   });
 }
 
+function applyViewZoom() {
+  const scale = Number(viewZoomRange.value) / 100;
+  canvasViewport.style.transform = `scale(${scale})`;
+}
+
 function updateSliderLabels() {
+  viewZoomRangeValue.textContent = `${viewZoomRange.value}%`;
   zoomRangeValue.textContent = `${zoomRange.value}%`;
   lightRangeValue.textContent = lightRange.value;
   brightnessRangeValue.textContent = brightnessRange.value;
@@ -329,6 +338,7 @@ function updateSliderLabels() {
 }
 
 function resetEditorControls() {
+  viewZoomRange.value = 70;
   zoomRange.value = 100;
   lightRange.value = 0;
   brightnessRange.value = 0;
@@ -337,6 +347,7 @@ function resetEditorControls() {
   sharpnessRange.value = 0;
   brushRange.value = 30;
   updateSliderLabels();
+  applyViewZoom();
   setToolMode("view");
 }
 
@@ -420,7 +431,7 @@ function applyAdjustments(ctx, width, height) {
     data[i + 2] = Math.max(0, Math.min(255, b));
   }
 
-  ctx.putImageData(imageData, 0, 0);
+  ctx.putImageData(imageData);
 
   if (sharpness > 0) {
     const strength = sharpness / 100;
@@ -865,6 +876,11 @@ toolModeButtons.forEach((btn) => {
   });
 });
 
+viewZoomRange.addEventListener("input", () => {
+  updateSliderLabels();
+  applyViewZoom();
+});
+
 [zoomRange, lightRange, brightnessRange, contrastRange, temperatureRange, sharpnessRange, brushRange].forEach((input) => {
   input.addEventListener("input", () => {
     updateSliderLabels();
@@ -900,4 +916,5 @@ editorModal.addEventListener("click", (event) => {
 });
 
 updateSliderLabels();
+applyViewZoom();
 setToolMode("view");
