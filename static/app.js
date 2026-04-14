@@ -7,6 +7,11 @@ const clearBtn = document.getElementById("clearBtn");
 
 const dropZone = document.getElementById("dropZone");
 
+const outputFormat = document.getElementById("outputFormat");
+const backgroundMode = document.getElementById("backgroundMode");
+const outputWidth = document.getElementById("outputWidth");
+const outputHeight = document.getElementById("outputHeight");
+
 const resultBox = document.getElementById("resultBox");
 const resultText = document.getElementById("resultText");
 const zipDownloadBtn = document.getElementById("zipDownloadBtn");
@@ -21,6 +26,12 @@ const loadingPercent = document.getElementById("loadingPercent");
 const loadingBarFill = document.getElementById("loadingBarFill");
 const loadingSteps = Array.from(document.querySelectorAll(".loading-step"));
 
+const introOverlay = document.getElementById("introOverlay");
+const introLoadingFill = document.getElementById("introLoadingFill");
+const introLoadingLabel = document.getElementById("introLoadingLabel");
+const introLoadingPercent = document.getElementById("introLoadingPercent");
+const introSteps = Array.from(document.querySelectorAll(".intro-step"));
+
 const editorModal = document.getElementById("editorModal");
 const editorTitle = document.getElementById("editorTitle");
 const closeEditorBtn = document.getElementById("closeEditorBtn");
@@ -33,8 +44,14 @@ const editorDownloadBtn = document.getElementById("editorDownloadBtn");
 const editorCanvas = document.getElementById("editorCanvas");
 const editorCtx = editorCanvas.getContext("2d");
 const canvasViewport = document.getElementById("canvasViewport");
+const canvasStage = document.getElementById("canvasStage");
 
 const toolModeButtons = Array.from(document.querySelectorAll(".tool-mode"));
+
+const editorOutputFormat = document.getElementById("editorOutputFormat");
+const editorBackgroundMode = document.getElementById("editorBackgroundMode");
+const editorOutputWidth = document.getElementById("editorOutputWidth");
+const editorOutputHeight = document.getElementById("editorOutputHeight");
 
 const viewZoomRange = document.getElementById("viewZoomRange");
 const zoomRange = document.getElementById("zoomRange");
@@ -66,6 +83,7 @@ const editorState = {
   workingMaskCanvas: document.createElement("canvas"),
   baseCanvas: document.createElement("canvas"),
   retouchCanvas: document.createElement("canvas"),
+  finalCanvas: document.createElement("canvas"),
   history: [],
   historyIndex: -1,
   isDrawing: false,
@@ -80,14 +98,36 @@ const originalMaskCtx = editorState.originalMaskCanvas.getContext("2d");
 const workingMaskCtx = editorState.workingMaskCanvas.getContext("2d");
 const baseCtx = editorState.baseCanvas.getContext("2d");
 const retouchCtx = editorState.retouchCanvas.getContext("2d");
+const finalCtx = editorState.finalCanvas.getContext("2d");
 
 editorState.baseCanvas.width = 1000;
 editorState.baseCanvas.height = 1000;
 editorState.retouchCanvas.width = 1000;
 editorState.retouchCanvas.height = 1000;
+editorState.finalCanvas.width = 1000;
+editorState.finalCanvas.height = 1000;
 
 function setStatus(message) {
   statusBox.textContent = message;
+}
+
+function normalizeDimension(value, fallback = 1000) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(100, Math.min(5000, Math.round(n)));
+}
+
+function syncFormatAndBackground(formatEl, backgroundEl) {
+  if (formatEl.value === "jpg" || formatEl.value === "jpeg") {
+    backgroundEl.value = "white";
+    backgroundEl.disabled = true;
+  } else {
+    backgroundEl.disabled = false;
+  }
+}
+
+function setTransparencyPreview(isTransparent) {
+  canvasStage.classList.toggle("transparent-bg", isTransparent);
 }
 
 function resetLoadingSteps() {
@@ -147,7 +187,7 @@ function startLoadingSimulation(fileCount) {
     { progress: 8, step: 1, label: "Separando arquivos..." },
     { progress: 24, step: 2, label: "Enviando ao servidor..." },
     { progress: 58, step: 3, label: `Removendo fundo em ${fileCount} imagem(ns)...` },
-    { progress: 82, step: 4, label: "Gerando JPG 1000x1000..." },
+    { progress: 82, step: 4, label: "Gerando arquivo final..." },
     { progress: 96, step: 5, label: "Finalizando ZIP..." },
   ];
 
@@ -198,6 +238,64 @@ function finishLoadingError(message) {
   setTimeout(() => {
     hideLoading();
   }, 900);
+}
+
+function setIntroStep(stepNumber, label) {
+  introSteps.forEach((step) => {
+    const num = Number(step.dataset.step);
+    const status = step.querySelector(".intro-step-status");
+
+    if (num < stepNumber) {
+      step.classList.remove("active");
+      step.classList.add("done");
+      if (status) status.textContent = "concluído";
+    } else if (num === stepNumber) {
+      step.classList.remove("done");
+      step.classList.add("active");
+      if (status) status.textContent = "carregando";
+    } else {
+      step.classList.remove("active", "done");
+      if (status) status.textContent = "aguardando";
+    }
+  });
+
+  if (label) introLoadingLabel.textContent = label;
+}
+
+function runIntroLoading() {
+  return new Promise((resolve) => {
+    const stages = [
+      { progress: 18, step: 1, label: "Inicializando interface..." },
+      { progress: 44, step: 2, label: "Preparando editor..." },
+      { progress: 73, step: 3, label: "Aplicando configurações..." },
+      { progress: 100, step: 4, label: "Finalizando ambiente..." },
+    ];
+
+    let current = 0;
+    let stageIndex = 0;
+    setIntroStep(1, stages[0].label);
+
+    const timer = setInterval(() => {
+      if (stageIndex >= stages.length) {
+        clearInterval(timer);
+        introOverlay.classList.add("hidden");
+        setTimeout(resolve, 450);
+        return;
+      }
+
+      const target = stages[stageIndex].progress;
+      if (current < target) {
+        current += 1;
+        introLoadingFill.style.width = `${current}%`;
+        introLoadingPercent.textContent = `${current}%`;
+      } else {
+        stageIndex += 1;
+        if (stageIndex < stages.length) {
+          setIntroStep(stages[stageIndex].step, stages[stageIndex].label);
+        }
+      }
+    }, 24);
+  });
 }
 
 function xhrPostJson(url, formData, onUploadProgress) {
@@ -283,14 +381,18 @@ function renderGallery(items) {
     const card = document.createElement("div");
     card.className = "gallery-card";
 
+    const transparentClass = item.background_mode === "transparent" ? "transparent-bg" : "";
+    const outputLabel = `${item.output_format.toUpperCase()} • ${item.output_width}x${item.output_height} • ${item.background_mode === "transparent" ? "Transparente" : "Branco"}`;
+
     card.innerHTML = `
       <div class="gallery-name">${item.filename}</div>
-      <div class="gallery-preview">
+      <div class="gallery-meta">${outputLabel}</div>
+      <div class="gallery-preview ${transparentClass}">
         <img src="${cacheBust(item.preview_url)}" alt="${item.filename}" loading="lazy">
       </div>
       <div class="result-actions">
         <button class="btn btn-primary open-editor-btn" type="button">Editar</button>
-        <a class="btn btn-success" href="${item.download_url}" target="_blank" rel="noopener noreferrer">Baixar JPG</a>
+        <a class="btn btn-success" href="${item.download_url}" target="_blank" rel="noopener noreferrer">Baixar arquivo</a>
       </div>
     `;
 
@@ -326,6 +428,14 @@ function applyViewZoom() {
   canvasViewport.style.transform = `scale(${scale})`;
 }
 
+function getEditorOutputSettings() {
+  const format = editorOutputFormat.value;
+  const background = (format === "jpg" || format === "jpeg") ? "white" : editorBackgroundMode.value;
+  const width = normalizeDimension(editorOutputWidth.value, 1000);
+  const height = normalizeDimension(editorOutputHeight.value, 1000);
+  return { format, background, width, height };
+}
+
 function updateSliderLabels() {
   viewZoomRangeValue.textContent = `${viewZoomRange.value}%`;
   zoomRangeValue.textContent = `${zoomRange.value}%`;
@@ -338,7 +448,7 @@ function updateSliderLabels() {
 }
 
 function resetEditorControls() {
-  viewZoomRange.value = 70;
+  viewZoomRange.value = 58;
   zoomRange.value = 100;
   lightRange.value = 0;
   brightnessRange.value = 0;
@@ -359,7 +469,7 @@ function saveHistory() {
       editorState.workingMaskCanvas.width,
       editorState.workingMaskCanvas.height
     ),
-    retouch: retouchCtx.getImageData(0, 0, 1000, 1000),
+    retouch: retouchCtx.getImageData(0, 0, editorState.retouchCanvas.width, editorState.retouchCanvas.height),
     controls: {
       zoom: Number(zoomRange.value),
       light: Number(lightRange.value),
@@ -385,6 +495,9 @@ function restoreHistory(index) {
   editorState.workingMaskCanvas.width = snapshot.mask.width;
   editorState.workingMaskCanvas.height = snapshot.mask.height;
   workingMaskCtx.putImageData(snapshot.mask, 0, 0);
+
+  editorState.retouchCanvas.width = snapshot.retouch.width;
+  editorState.retouchCanvas.height = snapshot.retouch.height;
   retouchCtx.putImageData(snapshot.retouch, 0, 0);
 
   zoomRange.value = snapshot.controls.zoom;
@@ -407,7 +520,6 @@ function applyAdjustments(ctx, width, height) {
 
   let imageData = ctx.getImageData(0, 0, width, height);
   const data = imageData.data;
-
   const contrastFactor = (259 * (contrast + 255)) / (255 * (259 - contrast));
 
   for (let i = 0; i < data.length; i += 4) {
@@ -431,7 +543,7 @@ function applyAdjustments(ctx, width, height) {
     data[i + 2] = Math.max(0, Math.min(255, b));
   }
 
-  ctx.putImageData(imageData);
+  ctx.putImageData(imageData, 0, 0);
 
   if (sharpness > 0) {
     const strength = sharpness / 100;
@@ -464,6 +576,12 @@ function applyAdjustments(ctx, width, height) {
 }
 
 function renderBaseFromMask() {
+  const { width: outputW, height: outputH, background } = getEditorOutputSettings();
+
+  editorState.baseCanvas.width = outputW;
+  editorState.baseCanvas.height = outputH;
+  baseCtx.clearRect(0, 0, outputW, outputH);
+
   const tempCanvas = document.createElement("canvas");
   tempCanvas.width = editorState.isolatedImg.width;
   tempCanvas.height = editorState.isolatedImg.height;
@@ -482,9 +600,12 @@ function renderBaseFromMask() {
 
   const bbox = getAlphaBoundingBox(tempCanvas);
 
-  baseCtx.clearRect(0, 0, 1000, 1000);
-  baseCtx.fillStyle = "#ffffff";
-  baseCtx.fillRect(0, 0, 1000, 1000);
+  if (background === "transparent") {
+    baseCtx.clearRect(0, 0, outputW, outputH);
+  } else {
+    baseCtx.fillStyle = "#ffffff";
+    baseCtx.fillRect(0, 0, outputW, outputH);
+  }
 
   if (!bbox) {
     editorState.placement = null;
@@ -497,19 +618,20 @@ function renderBaseFromMask() {
   const cropCtx = cropCanvas.getContext("2d");
   cropCtx.drawImage(tempCanvas, bbox.x, bbox.y, bbox.w, bbox.h, 0, 0, bbox.w, bbox.h);
 
-  const marginPx = Math.round(1000 * 0.08);
-  const maxW = 1000 - marginPx * 2;
-  const maxH = 1000 - marginPx * 2;
+  const marginX = Math.round(outputW * 0.08);
+  const marginY = Math.round(outputH * 0.08);
+  const maxW = outputW - marginX * 2;
+  const maxH = outputH - marginY * 2;
   const fitScale = Math.min(maxW / bbox.w, maxH / bbox.h);
 
   const zoomFactor = Number(zoomRange.value) / 100;
   const drawW = Math.max(1, Math.round(bbox.w * fitScale * zoomFactor));
   const drawH = Math.max(1, Math.round(bbox.h * fitScale * zoomFactor));
-  const drawX = Math.round((1000 - drawW) / 2);
-  const drawY = Math.round((1000 - drawH) / 2);
+  const drawX = Math.round((outputW - drawW) / 2);
+  const drawY = Math.round((outputH - drawH) / 2);
 
   baseCtx.drawImage(cropCanvas, drawX, drawY, drawW, drawH);
-  applyAdjustments(baseCtx, 1000, 1000);
+  applyAdjustments(baseCtx, outputW, outputH);
 
   editorState.placement = {
     bbox,
@@ -519,22 +641,38 @@ function renderBaseFromMask() {
     drawH,
     scaleX: bbox.w / drawW,
     scaleY: bbox.h / drawH,
+    outputW,
+    outputH,
   };
 }
 
 function copyBaseToRetouch() {
-  retouchCtx.clearRect(0, 0, 1000, 1000);
+  const { width: outputW, height: outputH } = getEditorOutputSettings();
+  editorState.retouchCanvas.width = outputW;
+  editorState.retouchCanvas.height = outputH;
+  retouchCtx.clearRect(0, 0, outputW, outputH);
   retouchCtx.drawImage(editorState.baseCanvas, 0, 0);
 }
 
+function updateCanvasElementSize() {
+  const { width: outputW, height: outputH } = getEditorOutputSettings();
+  editorCanvas.width = outputW;
+  editorCanvas.height = outputH;
+  editorCanvas.style.width = `${outputW}px`;
+  editorCanvas.style.height = `${outputH}px`;
+}
+
 function redrawEditor(resetRetouch = true) {
+  updateCanvasElementSize();
   renderBaseFromMask();
+
   if (resetRetouch) {
     copyBaseToRetouch();
   }
 
-  editorCtx.clearRect(0, 0, 1000, 1000);
+  editorCtx.clearRect(0, 0, editorCanvas.width, editorCanvas.height);
   editorCtx.drawImage(editorState.retouchCanvas, 0, 0);
+  setTransparencyPreview(getEditorOutputSettings().background === "transparent");
 }
 
 function getAlphaBoundingBox(canvas) {
@@ -639,6 +777,13 @@ function openEditor(item) {
   editorState.item = item;
   editorTitle.textContent = `Editor — ${item.filename}`;
   editorDownloadBtn.href = item.download_url;
+
+  editorOutputFormat.value = item.output_format || "jpg";
+  editorBackgroundMode.value = item.background_mode || "white";
+  editorOutputWidth.value = item.output_width || 1000;
+  editorOutputHeight.value = item.output_height || 1000;
+
+  syncFormatAndBackground(editorOutputFormat, editorBackgroundMode);
   resetEditorControls();
 
   Promise.all([loadImage(item.isolated_url), loadImage(item.mask_url)])
@@ -697,23 +842,31 @@ async function saveEditor() {
     saveBtn.disabled = true;
     setStatus("Salvando imagem editada...");
 
-    const dataUrl = editorState.retouchCanvas.toDataURL("image/jpeg", 0.95);
+    const settings = getEditorOutputSettings();
+    const mime = settings.format === "png" ? "image/png" : "image/jpeg";
+    const quality = settings.format === "png" ? undefined : 0.95;
+
+    editorState.finalCanvas.width = settings.width;
+    editorState.finalCanvas.height = settings.height;
+    finalCtx.clearRect(0, 0, settings.width, settings.height);
+    finalCtx.drawImage(editorState.retouchCanvas, 0, 0);
+
+    const dataUrl = editorState.finalCanvas.toDataURL(mime, quality);
     const data = await postJson(editorState.item.save_url, { data_url: dataUrl });
 
     editorState.item.preview_url = data.preview_url;
     editorState.item.download_url = data.download_url;
+    editorState.item.output_format = settings.format;
+    editorState.item.background_mode = settings.background;
+    editorState.item.output_width = settings.width;
+    editorState.item.output_height = settings.height;
 
-    const cards = Array.from(galleryGrid.querySelectorAll(".gallery-card"));
-    cards.forEach((card) => {
-      const name = card.querySelector(".gallery-name")?.textContent;
-      if (name === editorState.item.filename) {
-        const img = card.querySelector("img");
-        const link = card.querySelector("a");
-        if (img) img.src = cacheBust(data.preview_url);
-        if (link) link.href = data.download_url;
-      }
-    });
+    const itemIndex = window.__photopeg_items.findIndex((x) => x.image_id === editorState.item.image_id);
+    if (itemIndex >= 0) {
+      window.__photopeg_items[itemIndex] = { ...editorState.item };
+    }
 
+    renderGallery(window.__photopeg_items);
     editorDownloadBtn.href = data.download_url;
     setStatus("Imagem editada salva com sucesso.");
   } catch (error) {
@@ -809,8 +962,41 @@ function bindDragAndDrop() {
   });
 }
 
+function handleFormatChange(formatEl, backgroundEl) {
+  syncFormatAndBackground(formatEl, backgroundEl);
+
+  if (editorState.item && formatEl === editorOutputFormat) {
+    setTransparencyPreview(editorBackgroundMode.value === "transparent");
+    redrawEditor(true);
+  }
+}
+
+function getBatchOutputSettings() {
+  return {
+    format: outputFormat.value,
+    background: (outputFormat.value === "jpg" || outputFormat.value === "jpeg") ? "white" : backgroundMode.value,
+    width: normalizeDimension(outputWidth.value, 1000),
+    height: normalizeDimension(outputHeight.value, 1000),
+  };
+}
+
 filesInput.addEventListener("change", updateFileName);
 bindDragAndDrop();
+
+outputFormat.addEventListener("change", () => handleFormatChange(outputFormat, backgroundMode));
+editorOutputFormat.addEventListener("change", () => handleFormatChange(editorOutputFormat, editorBackgroundMode));
+
+backgroundMode.addEventListener("change", () => {
+  if (outputFormat.value === "jpg" || outputFormat.value === "jpeg") backgroundMode.value = "white";
+});
+
+editorBackgroundMode.addEventListener("change", () => {
+  if (editorOutputFormat.value === "jpg" || editorOutputFormat.value === "jpeg") {
+    editorBackgroundMode.value = "white";
+  }
+  setTransparencyPreview(editorBackgroundMode.value === "transparent");
+  if (editorState.item) redrawEditor(true);
+});
 
 clearBtn.addEventListener("click", () => {
   filesInput.value = "";
@@ -832,10 +1018,20 @@ form.addEventListener("submit", async (event) => {
     return;
   }
 
+  const batchSettings = getBatchOutputSettings();
+
+  outputWidth.value = batchSettings.width;
+  outputHeight.value = batchSettings.height;
+
   const formData = new FormData();
   Array.from(filesInput.files).forEach((file) => formData.append("files", file));
+
   formData.append("margin_percent", "8");
   formData.append("jpeg_quality", "95");
+  formData.append("output_format", batchSettings.format);
+  formData.append("background_mode", batchSettings.background);
+  formData.append("output_width", String(batchSettings.width));
+  formData.append("output_height", String(batchSettings.height));
 
   submitBtn.disabled = true;
   resetResult();
@@ -849,15 +1045,17 @@ form.addEventListener("submit", async (event) => {
       setLoadingStep(2, "enviando");
     });
 
+    window.__photopeg_items = data.items || [];
+
     finishLoadingSuccess();
     setStatus(
-      `Concluído.\nImagens processadas: ${data.count}\nFormato final: JPG\nFundo: branco\nTamanho: 1000x1000 px`
+      `Concluído.\nImagens processadas: ${data.count}\nFormato final: ${data.output_format.toUpperCase()}\nFundo: ${data.background_mode === "transparent" ? "transparente" : "branco"}\nTamanho: ${data.output_width}x${data.output_height} px`
     );
 
     resultText.textContent = `Lote concluído com ${data.count} imagem(ns).`;
     zipDownloadBtn.href = data.zip_url;
     resultBox.classList.add("active");
-    renderGallery(data.items || []);
+    renderGallery(window.__photopeg_items);
   } catch (error) {
     finishLoadingError(error.message);
     setStatus(error.message || "Falha ao processar o lote.");
@@ -891,6 +1089,16 @@ viewZoomRange.addEventListener("input", () => {
   });
 });
 
+[editorOutputWidth, editorOutputHeight].forEach((input) => {
+  input.addEventListener("change", () => {
+    input.value = String(normalizeDimension(input.value, 1000));
+    if (editorState.item) {
+      redrawEditor(true);
+      saveHistory();
+    }
+  });
+});
+
 editorCanvas.addEventListener("mousedown", handleEditorPointerDown);
 editorCanvas.addEventListener("mousemove", handleEditorPointerMove);
 window.addEventListener("mouseup", handleEditorPointerUp);
@@ -915,6 +1123,15 @@ editorModal.addEventListener("click", (event) => {
   if (event.target === editorModal) closeEditor();
 });
 
+window.__photopeg_items = [];
+
+syncFormatAndBackground(outputFormat, backgroundMode);
+syncFormatAndBackground(editorOutputFormat, editorBackgroundMode);
 updateSliderLabels();
 applyViewZoom();
+setTransparencyPreview(false);
 setToolMode("view");
+
+runIntroLoading().then(() => {
+  setStatus("Ambiente pronto para uso.");
+});
