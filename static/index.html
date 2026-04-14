@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PhotoPEG Studio</title>
 
-  <link rel="icon" href="/static/favicon-32x32.png?v=12" sizes="32x32" type="image/png">
-  <link rel="shortcut icon" href="/static/favicon-32x32.png?v=12" type="image/png">
-  <link rel="apple-touch-icon" href="/static/favicon-32x32.png?v=12">
+  <link rel="icon" href="/static/favicon-32x32.png?v=13" sizes="32x32" type="image/png">
+  <link rel="shortcut icon" href="/static/favicon-32x32.png?v=13" type="image/png">
+  <link rel="apple-touch-icon" href="/static/favicon-32x32.png?v=13">
 
   <style>
     * { box-sizing: border-box; }
@@ -826,6 +826,14 @@
             <h4 class="panel-title">Ajustes de imagem</h4>
             <div class="slider-group">
               <div class="field">
+                <label for="zoomRange">Zoom da foto (%)</label>
+                <div class="slider-wrap">
+                  <div class="slider-head"><span>Ajuste</span><span class="slider-value" id="zoomRangeValue">100%</span></div>
+                  <input id="zoomRange" type="range" min="40" max="140" value="100">
+                </div>
+              </div>
+
+              <div class="field">
                 <label for="lightRange">Luz</label>
                 <div class="slider-wrap">
                   <div class="slider-head"><span>Ajuste</span><span class="slider-value" id="lightRangeValue">0</span></div>
@@ -925,6 +933,6 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=12"></script>
+  <script src="/static/app.js?v=13"></script>
 </body>
 </html>
