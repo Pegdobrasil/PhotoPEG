@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PhotoPEG Studio</title>
 
-  <link rel="icon" href="/static/favicon-32x32.png?v=11" sizes="32x32" type="image/png">
-  <link rel="shortcut icon" href="/static/favicon-32x32.png?v=11" type="image/png">
-  <link rel="apple-touch-icon" href="/static/favicon-32x32.png?v=11">
+  <link rel="icon" href="/static/favicon-32x32.png?v=12" sizes="32x32" type="image/png">
+  <link rel="shortcut icon" href="/static/favicon-32x32.png?v=12" type="image/png">
+  <link rel="apple-touch-icon" href="/static/favicon-32x32.png?v=12">
 
   <style>
     * { box-sizing: border-box; }
@@ -22,6 +22,7 @@
       --blue-2: #4d89ff;
       --blue-3: #7ab6ff;
       --green: #18b36c;
+      --danger: #ff5f7a;
       --shadow: 0 18px 50px rgba(0, 0, 0, 0.32);
       --neon: 0 0 0 1px rgba(122,182,255,0.45), 0 0 18px rgba(77,137,255,0.22);
       --radius-xl: 26px;
@@ -43,7 +44,7 @@
 
     .shell {
       width: 100%;
-      max-width: 1160px;
+      max-width: 1240px;
       margin: 0 auto;
     }
 
@@ -102,7 +103,8 @@
     .upload-box,
     .status-box,
     .result-box,
-    .gallery-box {
+    .gallery-box,
+    .editor-panel {
       border: 1px solid var(--line);
       border-radius: var(--radius-lg);
       background: linear-gradient(180deg, rgba(16, 31, 54, 0.86), rgba(11, 21, 37, 0.86));
@@ -113,7 +115,8 @@
     .status-box:hover,
     .result-box:hover,
     .gallery-box:hover,
-    .gallery-card:hover {
+    .gallery-card:hover,
+    .editor-panel:hover {
       border-color: var(--line-strong);
       box-shadow: var(--neon);
     }
@@ -128,7 +131,7 @@
 
     .drop-zone {
       width: 100%;
-      max-width: 720px;
+      max-width: 760px;
       border: 1px dashed rgba(122,182,255,0.35);
       border-radius: 18px;
       padding: 26px 18px;
@@ -233,7 +236,9 @@
     }
 
     .actions,
-    .result-actions {
+    .result-actions,
+    .editor-actions,
+    .tool-tabs {
       display: flex;
       justify-content: center;
       gap: 12px;
@@ -296,6 +301,11 @@
       box-shadow: 0 0 0 1px rgba(24,179,108,0.45), 0 0 22px rgba(24,179,108,0.28);
     }
 
+    .btn-danger {
+      color: #fff;
+      background: linear-gradient(135deg, #d1425d, var(--danger));
+    }
+
     .status-box,
     .result-box {
       padding: 16px 18px;
@@ -347,7 +357,7 @@
 
     .gallery-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
       gap: 14px;
     }
 
@@ -378,6 +388,7 @@
         linear-gradient(45deg, #f2f5fb 25%, #ffffff 25%, #ffffff 50%, #f2f5fb 50%, #f2f5fb 75%, #ffffff 75%, #ffffff 100%);
       background-size: 20px 20px;
       border: 1px solid rgba(255,255,255,0.06);
+      cursor: pointer;
     }
 
     .gallery-preview img {
@@ -385,6 +396,167 @@
       height: 100%;
       object-fit: contain;
       display: block;
+    }
+
+    .editor-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 12000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: rgba(2, 8, 18, 0.88);
+      backdrop-filter: blur(12px);
+    }
+
+    .editor-modal.active {
+      display: flex;
+    }
+
+    .editor-shell {
+      width: min(1450px, 100%);
+      max-height: 94vh;
+      overflow: auto;
+      border-radius: 22px;
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(10, 20, 36, 0.98), rgba(8, 16, 29, 0.98));
+      box-shadow: 0 28px 80px rgba(0,0,0,0.45);
+      padding: 18px;
+      display: grid;
+      gap: 16px;
+    }
+
+    .editor-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .editor-title {
+      margin: 0;
+      font-size: 22px;
+      font-weight: 800;
+    }
+
+    .editor-layout {
+      display: grid;
+      grid-template-columns: 1fr 360px;
+      gap: 16px;
+    }
+
+    .editor-canvas-wrap {
+      border-radius: 18px;
+      padding: 14px;
+    }
+
+    .canvas-stage {
+      width: 100%;
+      max-width: 1000px;
+      margin: 0 auto;
+      aspect-ratio: 1 / 1;
+      border-radius: 14px;
+      overflow: hidden;
+      background:
+        linear-gradient(45deg, #f2f5fb 25%, #ffffff 25%, #ffffff 50%, #f2f5fb 50%, #f2f5fb 75%, #ffffff 75%, #ffffff 100%);
+      background-size: 24px 24px;
+      border: 1px solid rgba(255,255,255,0.06);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    #editorCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: crosshair;
+    }
+
+    .editor-sidebar {
+      display: grid;
+      gap: 14px;
+      align-content: start;
+    }
+
+    .editor-panel {
+      padding: 14px;
+    }
+
+    .panel-title {
+      margin: 0 0 12px;
+      font-size: 16px;
+      font-weight: 800;
+    }
+
+    .slider-group {
+      display: grid;
+      gap: 10px;
+    }
+
+    .field {
+      display: grid;
+      gap: 6px;
+    }
+
+    .field label {
+      font-size: 12px;
+      font-weight: 700;
+      color: #dce7ff;
+    }
+
+    .slider-wrap {
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 14px;
+      padding: 10px 12px;
+      background: rgba(255,255,255,0.03);
+    }
+
+    .slider-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .slider-value {
+      color: #eaf1ff;
+      font-weight: 700;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      appearance: none;
+      background: transparent;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-runnable-track {
+      height: 6px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--blue-1), var(--blue-2), var(--blue-3));
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #fff;
+      border: 3px solid var(--blue-2);
+      margin-top: -6px;
+      box-shadow: 0 0 0 4px rgba(77,137,255,0.15);
+    }
+
+    .editor-note {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.5;
     }
 
     .loading-overlay {
@@ -493,6 +665,12 @@
       text-transform: uppercase;
     }
 
+    @media (max-width: 980px) {
+      .editor-layout {
+        grid-template-columns: 1fr;
+      }
+    }
+
     @media (max-width: 760px) {
       body {
         padding: 14px;
@@ -524,7 +702,9 @@
       }
 
       .actions,
-      .result-actions {
+      .result-actions,
+      .editor-actions,
+      .tool-tabs {
         flex-direction: column;
       }
 
@@ -600,8 +780,107 @@
 
         <div id="galleryBox" class="gallery-box">
           <h3 class="gallery-title">Imagens processadas</h3>
-          <p class="gallery-subtitle">Pré-visualização do lote concluído.</p>
+          <p class="gallery-subtitle">Clique no card para editar ou baixe o JPG individual.</p>
           <div id="galleryGrid" class="gallery-grid"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="editorModal" class="editor-modal">
+    <div class="editor-shell">
+      <div class="editor-top">
+        <h3 class="editor-title" id="editorTitle">Editor da imagem</h3>
+        <div class="editor-actions">
+          <button id="undoBtn" class="btn btn-secondary" type="button">Desfazer</button>
+          <button id="redoBtn" class="btn btn-secondary" type="button">Refazer</button>
+          <button id="resetBtn" class="btn btn-secondary" type="button">Resetar</button>
+          <button id="saveBtn" class="btn btn-success" type="button">Salvar edição</button>
+          <button id="closeEditorBtn" class="btn btn-danger" type="button">Fechar</button>
+        </div>
+      </div>
+
+      <div class="editor-layout">
+        <div class="editor-panel editor-canvas-wrap">
+          <div class="canvas-stage">
+            <canvas id="editorCanvas" width="1000" height="1000"></canvas>
+          </div>
+        </div>
+
+        <div class="editor-sidebar">
+          <div class="editor-panel">
+            <h4 class="panel-title">Ferramentas</h4>
+            <div class="tool-tabs">
+              <button class="btn btn-primary tool-mode" data-mode="view" type="button">Visualizar</button>
+              <button class="btn btn-secondary tool-mode" data-mode="retouch" type="button">Retocar</button>
+              <button class="btn btn-secondary tool-mode" data-mode="erase" type="button">Editar contorno</button>
+              <button class="btn btn-secondary tool-mode" data-mode="restore" type="button">Restaurar contorno</button>
+            </div>
+            <p class="editor-note">
+              Em <strong>Retocar</strong>, o primeiro clique define a amostra. Depois arraste sobre a área com mancha ou logo.
+              Em <strong>Editar contorno</strong>, arraste para remover bordas. Em <strong>Restaurar contorno</strong>, arraste para recuperar partes.
+            </p>
+          </div>
+
+          <div class="editor-panel">
+            <h4 class="panel-title">Ajustes de imagem</h4>
+            <div class="slider-group">
+              <div class="field">
+                <label for="lightRange">Luz</label>
+                <div class="slider-wrap">
+                  <div class="slider-head"><span>Ajuste</span><span class="slider-value" id="lightRangeValue">0</span></div>
+                  <input id="lightRange" type="range" min="-100" max="100" value="0">
+                </div>
+              </div>
+
+              <div class="field">
+                <label for="brightnessRange">Brilho</label>
+                <div class="slider-wrap">
+                  <div class="slider-head"><span>Ajuste</span><span class="slider-value" id="brightnessRangeValue">0</span></div>
+                  <input id="brightnessRange" type="range" min="-100" max="100" value="0">
+                </div>
+              </div>
+
+              <div class="field">
+                <label for="contrastRange">Contraste</label>
+                <div class="slider-wrap">
+                  <div class="slider-head"><span>Ajuste</span><span class="slider-value" id="contrastRangeValue">0</span></div>
+                  <input id="contrastRange" type="range" min="-100" max="100" value="0">
+                </div>
+              </div>
+
+              <div class="field">
+                <label for="temperatureRange">Temperatura</label>
+                <div class="slider-wrap">
+                  <div class="slider-head"><span>Ajuste</span><span class="slider-value" id="temperatureRangeValue">0</span></div>
+                  <input id="temperatureRange" type="range" min="-100" max="100" value="0">
+                </div>
+              </div>
+
+              <div class="field">
+                <label for="sharpnessRange">Nitidez</label>
+                <div class="slider-wrap">
+                  <div class="slider-head"><span>Ajuste</span><span class="slider-value" id="sharpnessRangeValue">0</span></div>
+                  <input id="sharpnessRange" type="range" min="0" max="100" value="0">
+                </div>
+              </div>
+
+              <div class="field">
+                <label for="brushRange">Tamanho do pincel</label>
+                <div class="slider-wrap">
+                  <div class="slider-head"><span>Pincel</span><span class="slider-value" id="brushRangeValue">30</span></div>
+                  <input id="brushRange" type="range" min="5" max="120" value="30">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="editor-panel">
+            <h4 class="panel-title">Ações</h4>
+            <div class="editor-actions">
+              <a id="editorDownloadBtn" class="btn btn-success" href="#" target="_blank" rel="noopener noreferrer">Baixar JPG</a>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -646,6 +925,6 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=11"></script>
+  <script src="/static/app.js?v=12"></script>
 </body>
 </html>
