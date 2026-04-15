@@ -484,7 +484,7 @@ function updateSliderLabels() {
   contrastRangeValue.textContent = contrastRange.value;
   temperatureRangeValue.textContent = temperatureRange.value;
   sharpnessRangeValue.textContent = sharpnessRange.value;
-  brushRangeValue.textContent = brushRange.value;
+  brushRangeValue.textContent = `${brushRange.value}px`;
   updateBrushCursorSize();
 }
 
@@ -572,7 +572,7 @@ function applyAdjustments(ctx, width, height) {
   const light = Number(lightRange.value);
   const sharpness = Number(sharpnessRange.value);
 
-  let imageData = ctx.getImageData(0, 0, width, height);
+  const imageData = ctx.getImageData(0, 0, width, height);
   const data = imageData.data;
   const contrastFactor = (259 * (contrast + 255)) / (255 * (259 - contrast));
 
@@ -1244,7 +1244,7 @@ toolModeButtons.forEach((btn) => {
   btn.addEventListener("click", () => {
     setToolMode(btn.dataset.mode);
     if (btn.dataset.mode === "retouch") {
-      setStatus("Modo Retocar ativo. Arraste o pincel circular sobre a mancha ou logo.");
+      setStatus(`Modo Retocar ativo. Raio atual: ${brushRange.value}px.`);
     }
   });
 });
@@ -1267,6 +1267,11 @@ viewZoomRange.addEventListener("input", () => {
 ].forEach((input) => {
   input.addEventListener("input", () => {
     updateSliderLabels();
+
+    if (input === brushRange && editorState.mode === "retouch") {
+      setStatus(`Raio do retocar ajustado para ${brushRange.value}px.`);
+    }
+
     if (editorState.item) {
       redrawEditor(true);
       saveHistory();
