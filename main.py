@@ -64,10 +64,6 @@ def health():
         "status": "ok",
         "session_loaded": bg_session is not None,
         "max_files_per_batch": MAX_FILES_PER_BATCH,
-        "default_output_width": DEFAULT_OUTPUT_WIDTH,
-        "default_output_height": DEFAULT_OUTPUT_HEIGHT,
-        "default_output_format": "jpg",
-        "default_background": "white",
     }
 
 
