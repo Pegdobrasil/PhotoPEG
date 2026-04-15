@@ -47,6 +47,15 @@ class RenameImagePayload(BaseModel):
     new_name: str
 
 
+@app.on_event("startup")
+def warmup_model():
+    try:
+        get_bg_session()
+        print("Modelo rembg carregado no startup.")
+    except Exception as exc:
+        print(f"Falha ao aquecer rembg: {exc}")
+
+
 @app.get("/", response_class=HTMLResponse)
 def home():
     index_path = STATIC_DIR / "index.html"
@@ -312,7 +321,6 @@ async def process_batch(
             "success": True,
             "batch_id": batch_id,
             "count": len(processed_items),
-            "zip_url": f"/download/zip/{batch_id}",
             "items": processed_items,
             "output_format": output_format,
             "background_mode": background_mode,
