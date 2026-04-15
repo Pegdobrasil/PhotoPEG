@@ -94,6 +94,7 @@ const editorState = {
   history: [],
   historyIndex: -1,
   isDrawing: false,
+  lastMaskPoint: null,
   placement: null,
 };
 
@@ -410,7 +411,7 @@ function renderGallery(items) {
 
       <div class="result-actions">
         <button class="btn btn-primary open-editor-btn" type="button">Editar</button>
-        <a class="btn btn-success download-link" href="${item.download_url}" target="_blank" rel="noopener noreferrer">Baixar arquivo</a>
+        <a class="btn btn-success" href="${item.download_url}" target="_blank" rel="noopener noreferrer">Baixar arquivo</a>
       </div>
     `;
 
@@ -428,6 +429,7 @@ function renderGallery(items) {
         renderGallery(window.__photopeg_items);
         setStatus("Arquivo renomeado com sucesso.");
       } catch (error) {
+        console.error("Erro ao renomear:", error);
         setStatus(error.message || "Falha ao renomear o arquivo.");
       } finally {
         renameBtn.disabled = false;
@@ -456,7 +458,6 @@ function setToolMode(mode) {
     btn.classList.toggle("btn-primary", btn.dataset.mode === mode);
     btn.classList.toggle("btn-secondary", btn.dataset.mode !== mode);
   });
-
   updateBrushCursorVisibility();
 }
 
@@ -841,9 +842,7 @@ function getAverageColorFromRing(ctx, cx, cy, innerR, outerR) {
     }
   }
 
-  if (!count) {
-    return { r: 255, g: 255, b: 255 };
-  }
+  if (!count) return { r: 255, g: 255, b: 255 };
 
   return {
     r: Math.round(rSum / count),
@@ -892,25 +891,24 @@ function healSpot(ctx, cx, cy, radius) {
 }
 
 function updateBrushCursorSize() {
+  if (!brushCursor) return;
   const size = Number(brushRange.value) * 2;
   brushCursor.style.width = `${size}px`;
   brushCursor.style.height = `${size}px`;
 }
 
 function updateBrushCursorVisibility() {
-  const show =
-    editorState.item &&
-    (editorState.mode === "retouch" ||
-      editorState.mode === "erase" ||
-      editorState.mode === "restore");
-
+  if (!brushCursor) return;
+  const show = !!editorState.item && (
+    editorState.mode === "retouch" ||
+    editorState.mode === "erase" ||
+    editorState.mode === "restore"
+  );
   brushCursor.style.display = show ? "block" : "none";
 }
 
 function moveBrushCursor(event) {
-  if (!editorState.item) return;
-  if (!brushCursor) return;
-
+  if (!editorState.item || !brushCursor || !canvasViewport) return;
   const rect = canvasViewport.getBoundingClientRect();
   brushCursor.style.left = `${event.clientX - rect.left}px`;
   brushCursor.style.top = `${event.clientY - rect.top}px`;
@@ -918,9 +916,7 @@ function moveBrushCursor(event) {
 }
 
 function hideBrushCursor() {
-  if (brushCursor) {
-    brushCursor.style.display = "none";
-  }
+  if (brushCursor) brushCursor.style.display = "none";
 }
 
 function openEditor(item) {
@@ -972,6 +968,7 @@ function closeEditor() {
   editorModal.classList.remove("active");
   editorState.item = null;
   editorState.isDrawing = false;
+  editorState.lastMaskPoint = null;
   hideBrushCursor();
 }
 
@@ -985,6 +982,7 @@ function resetEditor() {
     editorState.originalMaskCanvas.height
   );
   workingMaskCtx.drawImage(editorState.originalMaskCanvas, 0, 0);
+
   resetEditorControls();
   redrawEditor(true);
   editorState.history = [];
@@ -1021,9 +1019,7 @@ async function saveEditor() {
     const itemIndex = window.__photopeg_items.findIndex(
       (x) => x.image_id === editorState.item.image_id
     );
-    if (itemIndex >= 0) {
-      window.__photopeg_items[itemIndex] = { ...editorState.item };
-    }
+    if (itemIndex >= 0) window.__photopeg_items[itemIndex] = { ...editorState.item };
 
     renderGallery(window.__photopeg_items);
     editorDownloadBtn.href = data.download_url;
@@ -1103,6 +1099,7 @@ function handleEditorPointerMove(event) {
 function handleEditorPointerUp() {
   if (!editorState.item || !editorState.isDrawing) return;
   editorState.isDrawing = false;
+  editorState.lastMaskPoint = null;
   saveHistory();
 }
 
@@ -1156,9 +1153,7 @@ filesInput.addEventListener("change", updateFileName);
 bindDragAndDrop();
 
 outputFormat.addEventListener("change", () => handleFormatChange(outputFormat, backgroundMode));
-editorOutputFormat.addEventListener("change", () =>
-  handleFormatChange(editorOutputFormat, editorBackgroundMode)
-);
+editorOutputFormat.addEventListener("change", () => handleFormatChange(editorOutputFormat, editorBackgroundMode));
 
 backgroundMode.addEventListener("change", () => {
   if (outputFormat.value === "jpg" || outputFormat.value === "jpeg") {
