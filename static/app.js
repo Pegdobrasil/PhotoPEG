@@ -47,6 +47,7 @@ const editorCanvas = document.getElementById("editorCanvas");
 const editorCtx = editorCanvas.getContext("2d");
 const canvasViewport = document.getElementById("canvasViewport");
 const canvasStage = document.getElementById("canvasStage");
+const brushCursor = document.getElementById("brushCursor");
 
 const toolModeButtons = Array.from(document.querySelectorAll(".tool-mode"));
 
@@ -93,10 +94,6 @@ const editorState = {
   history: [],
   historyIndex: -1,
   isDrawing: false,
-  retouchSample: null,
-  retouchHasSample: false,
-  retouchStartTarget: null,
-  retouchSourceStart: null,
   placement: null,
 };
 
@@ -459,6 +456,8 @@ function setToolMode(mode) {
     btn.classList.toggle("btn-primary", btn.dataset.mode === mode);
     btn.classList.toggle("btn-secondary", btn.dataset.mode !== mode);
   });
+
+  updateBrushCursorVisibility();
 }
 
 function applyViewZoom() {
@@ -485,6 +484,7 @@ function updateSliderLabels() {
   temperatureRangeValue.textContent = temperatureRange.value;
   sharpnessRangeValue.textContent = sharpnessRange.value;
   brushRangeValue.textContent = brushRange.value;
+  updateBrushCursorSize();
 }
 
 function resetEditorControls() {
@@ -497,7 +497,7 @@ function resetEditorControls() {
   contrastRange.value = 0;
   temperatureRange.value = 0;
   sharpnessRange.value = 0;
-  brushRange.value = 30;
+  brushRange.value = 40;
   updateSliderLabels();
   applyViewZoom();
   setToolMode("view");
@@ -589,7 +589,7 @@ function applyAdjustments(ctx, width, height) {
     data[i + 2] = Math.max(0, Math.min(255, b));
   }
 
-  ctx.putImageData(imageData, 0, 0);
+  ctx.putImageData(imageData);
 
   if (sharpness > 0) {
     const strength = sharpness / 100;
@@ -799,28 +799,114 @@ function drawMaskLine(from, to, restore = false) {
   workingMaskCtx.restore();
 }
 
-function cloneStamp(fromX, fromY, toX, toY) {
-  const size = Number(brushRange.value);
-  const radius = size / 2;
+function getAverageColorFromRing(ctx, cx, cy, innerR, outerR) {
+  const x0 = Math.max(0, Math.floor(cx - outerR));
+  const y0 = Math.max(0, Math.floor(cy - outerR));
+  const x1 = Math.min(ctx.canvas.width - 1, Math.ceil(cx + outerR));
+  const y1 = Math.min(ctx.canvas.height - 1, Math.ceil(cy + outerR));
 
-  retouchCtx.save();
-  retouchCtx.beginPath();
-  retouchCtx.arc(toX, toY, radius, 0, Math.PI * 2);
-  retouchCtx.clip();
+  const imageData = ctx.getImageData(x0, y0, x1 - x0 + 1, y1 - y0 + 1);
+  const data = imageData.data;
 
-  retouchCtx.drawImage(
-    editorState.retouchCanvas,
-    fromX - radius,
-    fromY - radius,
-    size,
-    size,
-    toX - radius,
-    toY - radius,
-    size,
-    size
-  );
+  let rSum = 0;
+  let gSum = 0;
+  let bSum = 0;
+  let count = 0;
 
-  retouchCtx.restore();
+  for (let y = 0; y < imageData.height; y++) {
+    for (let x = 0; x < imageData.width; x++) {
+      const px = x0 + x;
+      const py = y0 + y;
+      const dx = px - cx;
+      const dy = py - cy;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist >= innerR && dist <= outerR) {
+        const idx = (y * imageData.width + x) * 4;
+        const alpha = data[idx + 3];
+        if (alpha > 10) {
+          rSum += data[idx];
+          gSum += data[idx + 1];
+          bSum += data[idx + 2];
+          count++;
+        }
+      }
+    }
+  }
+
+  if (!count) {
+    return { r: 255, g: 255, b: 255 };
+  }
+
+  return {
+    r: Math.round(rSum / count),
+    g: Math.round(gSum / count),
+    b: Math.round(bSum / count),
+  };
+}
+
+function healSpot(ctx, cx, cy, radius) {
+  const innerRing = radius * 1.15;
+  const outerRing = radius * 1.95;
+  const avg = getAverageColorFromRing(ctx, cx, cy, innerRing, outerRing);
+
+  const x0 = Math.max(0, Math.floor(cx - radius));
+  const y0 = Math.max(0, Math.floor(cy - radius));
+  const x1 = Math.min(ctx.canvas.width - 1, Math.ceil(cx + radius));
+  const y1 = Math.min(ctx.canvas.height - 1, Math.ceil(cy + radius));
+
+  const imageData = ctx.getImageData(x0, y0, x1 - x0 + 1, y1 - y0 + 1);
+  const data = imageData.data;
+
+  for (let y = 0; y < imageData.height; y++) {
+    for (let x = 0; x < imageData.width; x++) {
+      const px = x0 + x;
+      const py = y0 + y;
+      const dx = px - cx;
+      const dy = py - cy;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist <= radius) {
+        const idx = (y * imageData.width + x) * 4;
+        const alpha = data[idx + 3];
+        if (alpha <= 10) continue;
+
+        const feather = 1 - (dist / radius);
+        const strength = Math.max(0.18, feather * 0.72);
+
+        data[idx] = Math.round(data[idx] * (1 - strength) + avg.r * strength);
+        data[idx + 1] = Math.round(data[idx + 1] * (1 - strength) + avg.g * strength);
+        data[idx + 2] = Math.round(data[idx + 2] * (1 - strength) + avg.b * strength);
+      }
+    }
+  }
+
+  ctx.putImageData(imageData, x0, y0);
+}
+
+function updateBrushCursorSize() {
+  const size = Number(brushRange.value) * 2;
+  brushCursor.style.width = `${size}px`;
+  brushCursor.style.height = `${size}px`;
+}
+
+function updateBrushCursorVisibility() {
+  const show = editorState.mode === "retouch" || editorState.mode === "erase" || editorState.mode === "restore";
+  brushCursor.style.display = show ? "block" : "none";
+}
+
+function moveBrushCursor(event) {
+  if (!editorState.item) return;
+
+  const rect = canvasViewport.getBoundingClientRect();
+  brushCursor.style.left = `${event.clientX - rect.left}px`;
+  brushCursor.style.top = `${event.clientY - rect.top}px`;
+
+  updateBrushCursorVisibility();
+}
+
+function hideBrushCursor() {
+  brushCursor.style.display = "none";
 }
 
 function openEditor(item) {
@@ -856,10 +942,11 @@ function openEditor(item) {
 
       editorState.history = [];
       editorState.historyIndex = -1;
-      editorState.retouchHasSample = false;
       saveHistory();
 
       editorModal.classList.add("active");
+      updateBrushCursorSize();
+      updateBrushCursorVisibility();
     })
     .catch(() => {
       setStatus("Não foi possível abrir o editor da imagem.");
@@ -870,7 +957,7 @@ function closeEditor() {
   editorModal.classList.remove("active");
   editorState.item = null;
   editorState.isDrawing = false;
-  editorState.retouchHasSample = false;
+  hideBrushCursor();
 }
 
 function resetEditor() {
@@ -882,7 +969,6 @@ function resetEditor() {
   redrawEditor(true);
   editorState.history = [];
   editorState.historyIndex = -1;
-  editorState.retouchHasSample = false;
   saveHistory();
 }
 
@@ -960,22 +1046,17 @@ function handleEditorPointerDown(event) {
   }
 
   if (editorState.mode === "retouch") {
-    if (!editorState.retouchHasSample) {
-      editorState.retouchSample = { x: point.x, y: point.y };
-      editorState.retouchHasSample = true;
-      setStatus("Amostra capturada. Agora arraste sobre a área que deseja corrigir.");
-      return;
-    }
-
     editorState.isDrawing = true;
-    editorState.retouchStartTarget = { x: point.x, y: point.y };
-    editorState.retouchSourceStart = { ...editorState.retouchSample };
-    cloneStamp(point.x, point.y, point.x, point.y);
+    healSpot(retouchCtx, point.x, point.y, Number(brushRange.value));
+    editorCtx.clearRect(0, 0, editorCanvas.width, editorCanvas.height);
     editorCtx.drawImage(editorState.retouchCanvas, 0, 0);
+    return;
   }
 }
 
 function handleEditorPointerMove(event) {
+  moveBrushCursor(event);
+
   if (!editorState.item || !editorState.isDrawing) return;
 
   const point = canvasPoint(event);
@@ -989,12 +1070,9 @@ function handleEditorPointerMove(event) {
     return;
   }
 
-  if (editorState.mode === "retouch" && editorState.retouchStartTarget && editorState.retouchSourceStart) {
-    const dx = point.x - editorState.retouchStartTarget.x;
-    const dy = point.y - editorState.retouchStartTarget.y;
-    const sourceX = editorState.retouchSourceStart.x + dx;
-    const sourceY = editorState.retouchSourceStart.y + dy;
-    cloneStamp(sourceX, sourceY, point.x, point.y);
+  if (editorState.mode === "retouch") {
+    healSpot(retouchCtx, point.x, point.y, Number(brushRange.value));
+    editorCtx.clearRect(0, 0, editorCanvas.width, editorCanvas.height);
     editorCtx.drawImage(editorState.retouchCanvas, 0, 0);
   }
 }
@@ -1138,8 +1216,7 @@ toolModeButtons.forEach((btn) => {
   btn.addEventListener("click", () => {
     setToolMode(btn.dataset.mode);
     if (btn.dataset.mode === "retouch") {
-      editorState.retouchHasSample = false;
-      setStatus("No modo Retocar, o primeiro clique define a amostra.");
+      setStatus("Modo Retocar ativo. Arraste o pincel circular sobre a mancha ou logo.");
     }
   });
 });
@@ -1181,6 +1258,8 @@ viewZoomRange.addEventListener("input", () => {
 
 editorCanvas.addEventListener("mousedown", handleEditorPointerDown);
 editorCanvas.addEventListener("mousemove", handleEditorPointerMove);
+editorCanvas.addEventListener("mouseenter", updateBrushCursorVisibility);
+editorCanvas.addEventListener("mouseleave", hideBrushCursor);
 window.addEventListener("mouseup", handleEditorPointerUp);
 
 closeEditorBtn.addEventListener("click", closeEditor);
