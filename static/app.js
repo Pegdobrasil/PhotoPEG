@@ -84,6 +84,7 @@ let currentProgress = 0;
 const editorState = {
   item: null,
   mode: "view",
+  originalImg: null,
   isolatedImg: null,
   maskImg: null,
   originalMaskCanvas: document.createElement("canvas"),
@@ -882,8 +883,13 @@ function openEditor(item) {
   syncFormatAndBackground(editorOutputFormat, editorBackgroundMode);
   resetEditorControls();
 
-  Promise.all([loadImage(item.isolated_url), loadImage(item.mask_url)])
-    .then(([isolatedImg, maskImg]) => {
+  Promise.all([
+    loadImage(item.original_url),
+    loadImage(item.isolated_url),
+    loadImage(item.mask_url),
+  ])
+    .then(([originalImg, isolatedImg, maskImg]) => {
+      editorState.originalImg = originalImg;
       editorState.isolatedImg = isolatedImg;
       editorState.maskImg = maskImg;
 
