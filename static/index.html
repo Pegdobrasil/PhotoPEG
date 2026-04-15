@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PhotoPEG Studio</title>
 
-  <link rel="icon" href="/static/favicon-32x32.png?v=20" sizes="32x32" type="image/png">
-  <link rel="shortcut icon" href="/static/favicon-32x32.png?v=20" type="image/png">
-  <link rel="apple-touch-icon" href="/static/favicon-32x32.png?v=20">
+  <link rel="icon" href="/static/favicon-32x32.png?v=30" sizes="32x32" type="image/png">
+  <link rel="shortcut icon" href="/static/favicon-32x32.png?v=30" type="image/png">
+  <link rel="apple-touch-icon" href="/static/favicon-32x32.png?v=30">
 
   <style>
     * { box-sizing: border-box; }
@@ -15,7 +15,6 @@
     :root {
       --bg: #07111f;
       --line: rgba(130, 166, 255, 0.14);
-      --line-strong: rgba(98, 153, 255, 0.4);
       --text: #f3f7ff;
       --muted: #9eb1d3;
       --blue-1: #2e6cff;
@@ -23,11 +22,8 @@
       --blue-3: #7ab6ff;
       --green: #18b36c;
       --danger: #ff5f7a;
-      --shadow: 0 18px 50px rgba(0, 0, 0, 0.32);
-      --neon: 0 0 0 1px rgba(122,182,255,0.45), 0 0 18px rgba(77,137,255,0.22);
       --radius-xl: 26px;
       --radius-lg: 20px;
-      --transition: 0.22s ease;
     }
 
     body {
@@ -52,7 +48,6 @@
       border: 1px solid var(--line);
       border-radius: var(--radius-xl);
       background: linear-gradient(180deg, rgba(10, 20, 36, 0.96), rgba(8, 16, 29, 0.96));
-      box-shadow: var(--shadow);
       overflow: hidden;
     }
 
@@ -86,7 +81,6 @@
       font-size: 42px;
       line-height: 1;
       font-weight: 800;
-      letter-spacing: -0.03em;
     }
 
     .brand-text p {
@@ -104,7 +98,6 @@
       border: 1px solid var(--line);
       border-radius: var(--radius-lg);
       background: linear-gradient(180deg, rgba(16, 31, 54, 0.86), rgba(11, 21, 37, 0.86));
-      transition: var(--transition);
     }
 
     .intro-overlay {
@@ -133,7 +126,6 @@
       width: min(760px, 100%);
       padding: 34px;
       text-align: center;
-      box-shadow: 0 25px 80px rgba(0,0,0,0.45);
       display: grid;
       gap: 18px;
     }
@@ -148,7 +140,6 @@
       margin: 0;
       font-size: 38px;
       font-weight: 900;
-      letter-spacing: -0.03em;
     }
 
     .intro-text {
@@ -244,7 +235,6 @@
       border-radius: 18px;
       padding: 26px 18px;
       background: rgba(255,255,255,0.03);
-      transition: var(--transition);
       display: grid;
       gap: 14px;
       justify-items: center;
@@ -252,9 +242,7 @@
 
     .drop-zone.dragover {
       border-color: rgba(122,182,255,0.7);
-      box-shadow: var(--neon);
       background: rgba(122,182,255,0.06);
-      transform: translateY(-1px);
     }
 
     .upload-title {
@@ -285,9 +273,6 @@
       font-size: 16px;
       font-weight: 800;
       cursor: pointer;
-      transition: var(--transition);
-      box-shadow: 0 10px 28px rgba(46, 108, 255, 0.22);
-      gap: 10px;
       padding: 0 24px;
     }
 
@@ -379,7 +364,6 @@
       font-size: 14px;
       font-weight: 800;
       cursor: pointer;
-      transition: var(--transition);
       min-height: 46px;
       text-decoration: none;
       display: inline-flex;
@@ -566,7 +550,6 @@
       border-radius: 22px;
       border: 1px solid var(--line);
       background: linear-gradient(180deg, rgba(10, 20, 36, 0.98), rgba(8, 16, 29, 0.98));
-      box-shadow: 0 28px 80px rgba(0,0,0,0.45);
       padding: 18px;
       display: grid;
       grid-template-rows: auto 1fr;
@@ -657,7 +640,6 @@
       background: rgba(46,108,255,0.08);
     }
 
-    .brush-cursor.ret touch {}
     .editor-sidebar {
       display: grid;
       gap: 14px;
@@ -760,7 +742,6 @@
       border-radius: 22px;
       border: 1px solid var(--line);
       background: linear-gradient(180deg, rgba(11, 21, 36, 0.98), rgba(8, 15, 27, 0.98));
-      box-shadow: 0 28px 80px rgba(0,0,0,0.45);
       padding: 22px;
     }
 
@@ -934,7 +915,7 @@
           />
           <div class="brand-text">
             <h1>PhotoPEG Studio</h1>
-            <p>Retocar com corretivo circular</p>
+            <p>Editor em lote com renomear, recorte e retoque</p>
           </div>
         </div>
 
@@ -994,8 +975,8 @@
 
             <div>• PNG pode usar fundo branco ou transparente</div>
             <div>• JPG e JPEG usam fundo branco</div>
-            <div>• Retocar agora usa pincel corretivo circular</div>
-            <div>• O raio do pincel pode ser aumentado</div>
+            <div>• Retocar usa pincel circular</div>
+            <div>• Limite: 50 imagens por lote</div>
           </div>
 
           <div class="actions">
@@ -1067,7 +1048,7 @@
               <button class="btn btn-secondary tool-mode" data-mode="restore" type="button">Restaurar contorno</button>
             </div>
             <p class="editor-note">
-              O modo <strong>Retocar</strong> agora age como corretivo circular sobre manchas e logos, sem clonar área errada.
+              O modo Retocar atua sobre manchas e logos usando um círculo de edição.
             </p>
           </div>
 
@@ -1240,6 +1221,6 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=20"></script>
+  <script src="/static/app.js?v=30"></script>
 </body>
 </html>
