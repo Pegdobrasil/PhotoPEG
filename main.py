@@ -9,6 +9,7 @@ from io import BytesIO
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
 
+import numpy as np
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -16,7 +17,7 @@ from PIL import Image
 from pydantic import BaseModel
 from rembg import new_session, remove
 
-app = FastAPI(title="PhotoPEG Studio")
+app = FastAPI(title="PhotoPEG Studio PRO")
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
@@ -209,6 +210,22 @@ def save_batch_meta(batch_dir: Path, meta: dict) -> None:
     meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def image_bytes_to_pil(raw: bytes) -> Image.Image:
+    return Image.open(BytesIO(raw))
+
+
+def pil_to_bytes(img: Image.Image, suffix: str) -> tuple[bytes, str]:
+    out = BytesIO()
+    suffix = suffix.lower()
+
+    if suffix == ".png":
+        img.save(out, format="PNG", optimize=True)
+        return out.getvalue(), "image/png"
+
+    img.convert("RGB").save(out, format="JPEG", quality=95, optimize=True)
+    return out.getvalue(), "image/jpeg"
+
+
 @app.post("/api/process-batch")
 async def process_batch(
     files: list[UploadFile] = File(...),
@@ -257,6 +274,14 @@ async def process_batch(
             item_dir = batch_dir / image_id
             item_dir.mkdir(parents=True, exist_ok=True)
 
+            original_path = item_dir / f"{original_base_name}_original{ext if ext != '.webp' else '.png'}"
+            if ext == ".webp":
+                original_img = image_bytes_to_pil(raw).convert("RGBA")
+                original_img.save(original_path.with_suffix(".png"))
+                original_path = original_path.with_suffix(".png")
+            else:
+                original_path.write_bytes(raw)
+
             isolated_rgba = remove_background(raw)
 
             isolated_path = item_dir / f"{original_base_name}_isolated.png"
@@ -288,6 +313,7 @@ async def process_batch(
                     "output_filename": output_filename,
                     "preview_url": media_url(output_path),
                     "download_url": f"/download/image/{batch_id}/{image_id}",
+                    "original_url": media_url(original_path),
                     "isolated_url": media_url(isolated_path),
                     "mask_url": media_url(mask_path),
                     "save_url": f"/api/save-edited/{batch_id}/{image_id}",
@@ -348,22 +374,23 @@ async def save_edited(batch_id: str, image_id: str, payload: SaveEditedPayload):
         if not item_dir.exists():
             raise HTTPException(status_code=404, detail="Imagem não encontrada.")
 
-        existing_files = list(item_dir.glob("*.jpg")) + list(item_dir.glob("*.jpeg")) + list(item_dir.glob("*.png"))
-        if not existing_files:
+        existing_files = (
+            list(item_dir.glob("*.jpg"))
+            + list(item_dir.glob("*.jpeg"))
+            + list(item_dir.glob("*.png"))
+        )
+
+        final_candidates = [f for f in existing_files if "_isolated" not in f.name and "_mask" not in f.name and "_original" not in f.name]
+        if not final_candidates:
             raise HTTPException(status_code=404, detail="Arquivo final não encontrado.")
 
-        file_path = existing_files[0]
+        file_path = final_candidates[0]
         raw = decode_data_url(payload.data_url)
         ext = file_path.suffix.lower()
 
-        if ext == ".png":
-            img = Image.open(BytesIO(raw)).convert("RGBA")
-            img.save(file_path, format="PNG", optimize=True)
-            media_type = "image/png"
-        else:
-            img = Image.open(BytesIO(raw)).convert("RGB")
-            img.save(file_path, format="JPEG", quality=95, optimize=True)
-            media_type = "image/jpeg"
+        img = Image.open(BytesIO(raw))
+        out_bytes, media_type = pil_to_bytes(img.convert("RGBA" if ext == ".png" else "RGB"), ext)
+        file_path.write_bytes(out_bytes)
 
         return {
             "success": True,
@@ -393,10 +420,12 @@ async def rename_image(batch_id: str, image_id: str, payload: RenameImagePayload
             raise HTTPException(status_code=404, detail="Imagem não encontrada.")
 
         files = list(item_dir.glob("*.jpg")) + list(item_dir.glob("*.jpeg")) + list(item_dir.glob("*.png"))
-        if not files:
+        final_files = [f for f in files if "_isolated" not in f.name and "_mask" not in f.name and "_original" not in f.name]
+
+        if not final_files:
             raise HTTPException(status_code=404, detail="Arquivo final não encontrado.")
 
-        old_file = files[0]
+        old_file = final_files[0]
         ext = old_file.suffix.lower()
         base_name = safe_filename_base(payload.new_name)
         new_file_name = f"{base_name}{ext}"
@@ -445,10 +474,12 @@ def download_image(batch_id: str, image_id: str):
         raise HTTPException(status_code=404, detail="Imagem não encontrada.")
 
     files = list(item_dir.glob("*.jpg")) + list(item_dir.glob("*.jpeg")) + list(item_dir.glob("*.png"))
-    if not files:
+    final_files = [f for f in files if "_isolated" not in f.name and "_mask" not in f.name and "_original" not in f.name]
+
+    if not final_files:
         raise HTTPException(status_code=404, detail="Arquivo final não encontrado.")
 
-    file_path = files[0]
+    file_path = final_files[0]
     ext = file_path.suffix.lower()
     media_type = "image/png" if ext == ".png" else "image/jpeg"
 
@@ -471,7 +502,9 @@ def download_zip(batch_id: str):
         for item_dir in sorted(batch_dir.iterdir()):
             if not item_dir.is_dir():
                 continue
-            for final_file in list(item_dir.glob("*.jpg")) + list(item_dir.glob("*.jpeg")) + list(item_dir.glob("*.png")):
+            files = list(item_dir.glob("*.jpg")) + list(item_dir.glob("*.jpeg")) + list(item_dir.glob("*.png"))
+            final_files = [f for f in files if "_isolated" not in f.name and "_mask" not in f.name and "_original" not in f.name]
+            for final_file in final_files:
                 zipf.write(final_file, arcname=final_file.name)
 
     return FileResponse(
