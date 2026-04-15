@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PhotoPEG Studio</title>
 
-  <link rel="icon" href="/static/favicon-32x32.png?v=19" sizes="32x32" type="image/png">
-  <link rel="shortcut icon" href="/static/favicon-32x32.png?v=19" type="image/png">
-  <link rel="apple-touch-icon" href="/static/favicon-32x32.png?v=19">
+  <link rel="icon" href="/static/favicon-32x32.png?v=20" sizes="32x32" type="image/png">
+  <link rel="shortcut icon" href="/static/favicon-32x32.png?v=20" type="image/png">
+  <link rel="apple-touch-icon" href="/static/favicon-32x32.png?v=20">
 
   <style>
     * { box-sizing: border-box; }
@@ -612,6 +612,7 @@
       background: #dfe1e5;
       border: 1px solid rgba(255,255,255,0.06);
       padding: 28px;
+      position: relative;
     }
 
     .canvas-stage.transparent-bg {
@@ -630,6 +631,7 @@
       justify-content: center;
       transform-origin: center center;
       transition: transform 0.18s ease;
+      position: relative;
     }
 
     #editorCanvas {
@@ -639,6 +641,23 @@
       box-shadow: 0 0 0 1px rgba(0,0,0,0.06);
     }
 
+    .brush-cursor {
+      position: absolute;
+      width: 40px;
+      height: 40px;
+      border: 2px solid rgba(46,108,255,0.95);
+      border-radius: 50%;
+      pointer-events: none;
+      transform: translate(-50%, -50%);
+      display: none;
+      z-index: 10;
+      box-shadow:
+        0 0 0 1px rgba(255,255,255,0.9) inset,
+        0 0 18px rgba(46,108,255,0.35);
+      background: rgba(46,108,255,0.08);
+    }
+
+    .brush-cursor.ret touch {}
     .editor-sidebar {
       display: grid;
       gap: 14px;
@@ -915,7 +934,7 @@
           />
           <div class="brand-text">
             <h1>PhotoPEG Studio</h1>
-            <p>Movimente o elemento e renomeie o arquivo</p>
+            <p>Retocar com corretivo circular</p>
           </div>
         </div>
 
@@ -975,8 +994,8 @@
 
             <div>• PNG pode usar fundo branco ou transparente</div>
             <div>• JPG e JPEG usam fundo branco</div>
-            <div>• No editor você pode mover o elemento por X e Y</div>
-            <div>• Também é possível renomear o arquivo</div>
+            <div>• Retocar agora usa pincel corretivo circular</div>
+            <div>• O raio do pincel pode ser aumentado</div>
           </div>
 
           <div class="actions">
@@ -1022,6 +1041,7 @@
           <div class="canvas-stage" id="canvasStage">
             <div class="canvas-viewport" id="canvasViewport">
               <canvas id="editorCanvas" width="1000" height="1000"></canvas>
+              <div id="brushCursor" class="brush-cursor"></div>
             </div>
           </div>
         </div>
@@ -1047,7 +1067,7 @@
               <button class="btn btn-secondary tool-mode" data-mode="restore" type="button">Restaurar contorno</button>
             </div>
             <p class="editor-note">
-              Use os controles de posição para mover o elemento dentro da arte final.
+              O modo <strong>Retocar</strong> agora age como corretivo circular sobre manchas e logos, sem clonar área errada.
             </p>
           </div>
 
@@ -1161,10 +1181,10 @@
               </div>
 
               <div class="field">
-                <label for="brushRange">Tamanho do pincel</label>
+                <label for="brushRange">Raio do pincel</label>
                 <div class="slider-wrap">
-                  <div class="slider-head"><span>Pincel</span><span class="slider-value" id="brushRangeValue">30</span></div>
-                  <input id="brushRange" type="range" min="5" max="120" value="30">
+                  <div class="slider-head"><span>Pincel circular</span><span class="slider-value" id="brushRangeValue">40</span></div>
+                  <input id="brushRange" type="range" min="10" max="220" value="40">
                 </div>
               </div>
             </div>
@@ -1220,6 +1240,6 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=19"></script>
+  <script src="/static/app.js?v=20"></script>
 </body>
 </html>
