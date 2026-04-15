@@ -4,6 +4,7 @@ const fileName = document.getElementById("fileName");
 const statusBox = document.getElementById("status");
 const submitBtn = document.getElementById("submitBtn");
 const clearBtn = document.getElementById("clearBtn");
+const startButton = document.getElementById("startButton");
 
 const dropZone = document.getElementById("dropZone");
 
@@ -30,7 +31,6 @@ const introOverlay = document.getElementById("introOverlay");
 const introLoadingFill = document.getElementById("introLoadingFill");
 const introLoadingLabel = document.getElementById("introLoadingLabel");
 const introLoadingPercent = document.getElementById("introLoadingPercent");
-const introSteps = Array.from(document.querySelectorAll(".intro-step"));
 
 const editorModal = document.getElementById("editorModal");
 const editorTitle = document.getElementById("editorTitle");
@@ -205,7 +205,7 @@ function startLoadingSimulation(fileCount) {
     { progress: 24, step: 2, label: "Enviando ao servidor..." },
     { progress: 58, step: 3, label: `Removendo fundo em ${fileCount} imagem(ns)...` },
     { progress: 82, step: 4, label: "Gerando arquivo final..." },
-    { progress: 96, step: 5, label: "Finalizando ZIP..." },
+    { progress: 96, step: 5, label: "Finalizando lote..." },
   ];
 
   let stageIndex = 0;
@@ -213,18 +213,16 @@ function startLoadingSimulation(fileCount) {
 
   loadingSimulationTimer = setInterval(() => {
     if (stageIndex >= stages.length) return;
-
     const target = stages[stageIndex].progress;
+
     if (currentProgress < target) {
       setLoadingProgress(currentProgress + 1, stages[stageIndex].label);
       setLoadingStep(stages[stageIndex].step, "em andamento");
     } else {
       stageIndex += 1;
-      if (stageIndex < stages.length) {
-        setLoadingStep(stages[stageIndex].step, "em andamento");
-      }
+      if (stageIndex < stages.length) setLoadingStep(stages[stageIndex].step, "em andamento");
     }
-  }, 80);
+  }, 70);
 }
 
 function finishLoadingSuccess() {
@@ -241,7 +239,7 @@ function finishLoadingSuccess() {
     if (status) status.textContent = "concluído";
   });
 
-  setTimeout(() => hideLoading(), 700);
+  setTimeout(() => hideLoading(), 500);
 }
 
 function finishLoadingError(message) {
@@ -250,64 +248,30 @@ function finishLoadingError(message) {
     loadingSimulationTimer = null;
   }
   loadingSubtitle.textContent = message || "Ocorreu uma falha durante o processamento.";
-  setTimeout(() => hideLoading(), 900);
-}
-
-function setIntroStep(stepNumber, label) {
-  introSteps.forEach((step) => {
-    const num = Number(step.dataset.step);
-    const status = step.querySelector(".intro-step-status");
-
-    if (num < stepNumber) {
-      step.classList.remove("active");
-      step.classList.add("done");
-      if (status) status.textContent = "concluído";
-    } else if (num === stepNumber) {
-      step.classList.remove("done");
-      step.classList.add("active");
-      if (status) status.textContent = "carregando";
-    } else {
-      step.classList.remove("active", "done");
-      if (status) status.textContent = "aguardando";
-    }
-  });
-
-  if (label) introLoadingLabel.textContent = label;
+  setTimeout(() => hideLoading(), 700);
 }
 
 function runIntroLoading() {
   return new Promise((resolve) => {
-    const stages = [
-      { progress: 18, step: 1, label: "Inicializando interface..." },
-      { progress: 44, step: 2, label: "Preparando editor..." },
-      { progress: 73, step: 3, label: "Aplicando configurações..." },
-      { progress: 100, step: 4, label: "Finalizando ambiente..." },
-    ];
-
     let current = 0;
-    let stageIndex = 0;
-    setIntroStep(1, stages[0].label);
+    const target = 100;
+    introLoadingLabel.textContent = "Preparando interface...";
 
     const timer = setInterval(() => {
-      if (stageIndex >= stages.length) {
-        clearInterval(timer);
-        introOverlay.classList.add("hidden");
-        setTimeout(resolve, 450);
-        return;
-      }
+      current += 8;
+      if (current > target) current = target;
 
-      const target = stages[stageIndex].progress;
-      if (current < target) {
-        current += 1;
-        introLoadingFill.style.width = `${current}%`;
-        introLoadingPercent.textContent = `${current}%`;
-      } else {
-        stageIndex += 1;
-        if (stageIndex < stages.length) {
-          setIntroStep(stages[stageIndex].step, stages[stageIndex].label);
-        }
+      introLoadingFill.style.width = `${current}%`;
+      introLoadingPercent.textContent = `${current}%`;
+
+      if (current >= target) {
+        clearInterval(timer);
+        setTimeout(() => {
+          introOverlay.classList.add("hidden");
+          resolve();
+        }, 180);
       }
-    }, 24);
+    }, 28);
   });
 }
 
@@ -358,7 +322,7 @@ async function postJson(url, payload) {
 
 function resetResult() {
   resultBox.classList.remove("active");
-  zipDownloadBtn.href = "#";
+  zipDownloadBtn.dataset.batchId = "";
   galleryBox.classList.remove("active");
   galleryGrid.innerHTML = "";
 }
@@ -807,92 +771,73 @@ function drawMaskLine(from, to, restore = false) {
   workingMaskCtx.restore();
 }
 
-function getAverageColorFromRing(ctx, cx, cy, innerR, outerR) {
-  const x0 = Math.max(0, Math.floor(cx - outerR));
-  const y0 = Math.max(0, Math.floor(cy - outerR));
-  const x1 = Math.min(ctx.canvas.width - 1, Math.ceil(cx + outerR));
-  const y1 = Math.min(ctx.canvas.height - 1, Math.ceil(cy + outerR));
+function healSpot(ctx, cx, cy, radius) {
+  const x0 = Math.max(0, Math.floor(cx - radius * 1.4));
+  const y0 = Math.max(0, Math.floor(cy - radius * 1.4));
+  const x1 = Math.min(ctx.canvas.width - 1, Math.ceil(cx + radius * 1.4));
+  const y1 = Math.min(ctx.canvas.height - 1, Math.ceil(cy + radius * 1.4));
 
-  const imageData = ctx.getImageData(x0, y0, x1 - x0 + 1, y1 - y0 + 1);
-  const data = imageData.data;
+  const width = x1 - x0 + 1;
+  const height = y1 - y0 + 1;
 
-  let rSum = 0;
-  let gSum = 0;
-  let bSum = 0;
-  let count = 0;
+  const srcImage = ctx.getImageData(x0, y0, width, height);
+  const src = srcImage.data;
+  const out = new Uint8ClampedArray(src);
 
-  for (let y = 0; y < imageData.height; y++) {
-    for (let x = 0; x < imageData.width; x++) {
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
       const px = x0 + x;
       const py = y0 + y;
       const dx = px - cx;
       const dy = py - cy;
       const dist = Math.sqrt(dx * dx + dy * dy);
 
-      if (dist >= innerR && dist <= outerR) {
-        const idx = (y * imageData.width + x) * 4;
-        const alpha = data[idx + 3];
-        if (alpha > 10) {
-          rSum += data[idx];
-          gSum += data[idx + 1];
-          bSum += data[idx + 2];
+      if (dist > radius) continue;
+
+      const feather = 1 - (dist / radius);
+      const mix = Math.max(0.12, feather * 0.55);
+
+      const idx = (y * width + x) * 4;
+      const alpha = src[idx + 3];
+      if (alpha < 10) continue;
+
+      let r = 0;
+      let g = 0;
+      let b = 0;
+      let count = 0;
+
+      for (let ky = -1; ky <= 1; ky++) {
+        for (let kx = -1; kx <= 1; kx++) {
+          const nIdx = ((y + ky) * width + (x + kx)) * 4;
+          if (src[nIdx + 3] < 10) continue;
+          r += src[nIdx];
+          g += src[nIdx + 1];
+          b += src[nIdx + 2];
           count++;
         }
       }
+
+      if (!count) continue;
+
+      r /= count;
+      g /= count;
+      b /= count;
+
+      out[idx] = Math.round(src[idx] * (1 - mix) + r * mix);
+      out[idx + 1] = Math.round(src[idx + 1] * (1 - mix) + g * mix);
+      out[idx + 2] = Math.round(src[idx + 2] * (1 - mix) + b * mix);
+      out[idx + 3] = src[idx + 3];
     }
   }
 
-  if (!count) return { r: 255, g: 255, b: 255 };
-
-  return {
-    r: Math.round(rSum / count),
-    g: Math.round(gSum / count),
-    b: Math.round(bSum / count),
-  };
-}
-
-function healSpot(ctx, cx, cy, radius) {
-  const innerRing = radius * 1.15;
-  const outerRing = radius * 1.95;
-  const avg = getAverageColorFromRing(ctx, cx, cy, innerRing, outerRing);
-
-  const x0 = Math.max(0, Math.floor(cx - radius));
-  const y0 = Math.max(0, Math.floor(cy - radius));
-  const x1 = Math.min(ctx.canvas.width - 1, Math.ceil(cx + radius));
-  const y1 = Math.min(ctx.canvas.height - 1, Math.ceil(cy + radius));
-
-  const imageData = ctx.getImageData(x0, y0, x1 - x0 + 1, y1 - y0 + 1);
-  const data = imageData.data;
-
-  for (let y = 0; y < imageData.height; y++) {
-    for (let x = 0; x < imageData.width; x++) {
-      const px = x0 + x;
-      const py = y0 + y;
-      const dx = px - cx;
-      const dy = py - cy;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-
-      if (dist <= radius) {
-        const idx = (y * imageData.width + x) * 4;
-        const alpha = data[idx + 3];
-        if (alpha <= 10) continue;
-
-        const feather = 1 - (dist / radius);
-        const strength = Math.max(0.18, feather * 0.72);
-
-        data[idx] = Math.round(data[idx] * (1 - strength) + avg.r * strength);
-        data[idx + 1] = Math.round(data[idx + 1] * (1 - strength) + avg.g * strength);
-        data[idx + 2] = Math.round(data[idx + 2] * (1 - strength) + avg.b * strength);
-      }
-    }
-  }
-
-  ctx.putImageData(imageData, x0, y0);
+  const result = new ImageData(out, width, height);
+  ctx.putImageData(result, x0, y0);
 }
 
 function updateBrushCursorSize() {
   if (!brushCursor) return;
-  const size = Number(brushRange.value) * 2;
+  const radius = Number(brushRange.value);
+  const size = radius * 2;
   brushCursor.style.width = `${size}px`;
   brushCursor.style.height = `${size}px`;
 }
@@ -908,10 +853,14 @@ function updateBrushCursorVisibility() {
 }
 
 function moveBrushCursor(event) {
-  if (!editorState.item || !brushCursor || !canvasViewport) return;
-  const rect = canvasViewport.getBoundingClientRect();
-  brushCursor.style.left = `${event.clientX - rect.left}px`;
-  brushCursor.style.top = `${event.clientY - rect.top}px`;
+  if (!editorState.item || !brushCursor) return;
+
+  const rect = editorCanvas.getBoundingClientRect();
+  const x = event.clientX - rect.left;
+  const y = event.clientY - rect.top;
+
+  brushCursor.style.left = `${x}px`;
+  brushCursor.style.top = `${y}px`;
   updateBrushCursorVisibility();
 }
 
@@ -1152,6 +1101,12 @@ function getBatchOutputSettings() {
 filesInput.addEventListener("change", updateFileName);
 bindDragAndDrop();
 
+if (startButton) {
+  startButton.addEventListener("click", () => {
+    document.getElementById("uploadForm").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+}
+
 outputFormat.addEventListener("change", () => handleFormatChange(outputFormat, backgroundMode));
 editorOutputFormat.addEventListener("change", () => handleFormatChange(editorOutputFormat, editorBackgroundMode));
 
@@ -1174,6 +1129,17 @@ clearBtn.addEventListener("click", () => {
   fileName.textContent = "Nenhum ficheiro selecionado";
   setStatus("Aguardando envio das imagens.");
   resetResult();
+});
+
+zipDownloadBtn.addEventListener("click", () => {
+  const batchId = zipDownloadBtn.dataset.batchId;
+  if (!batchId) {
+    setStatus("Nenhum lote disponível para gerar ZIP.");
+    return;
+  }
+
+  setStatus("Gerando ZIP do lote...");
+  window.open(`/download/zip/${batchId}`, "_blank", "noopener,noreferrer");
 });
 
 form.addEventListener("submit", async (event) => {
@@ -1228,7 +1194,7 @@ form.addEventListener("submit", async (event) => {
     );
 
     resultText.textContent = `Lote concluído com ${data.count} imagem(ns).`;
-    zipDownloadBtn.href = data.zip_url;
+    zipDownloadBtn.dataset.batchId = data.batch_id;
     resultBox.classList.add("active");
     renderGallery(window.__photopeg_items);
   } catch (error) {
@@ -1268,12 +1234,17 @@ viewZoomRange.addEventListener("input", () => {
   input.addEventListener("input", () => {
     updateSliderLabels();
 
+    if (input !== brushRange && editorState.item) {
+      redrawEditor(true);
+    }
+
     if (input === brushRange && editorState.mode === "retouch") {
       setStatus(`Raio do retocar ajustado para ${brushRange.value}px.`);
     }
+  });
 
-    if (editorState.item) {
-      redrawEditor(true);
+  input.addEventListener("change", () => {
+    if (editorState.item && input !== brushRange) {
       saveHistory();
     }
   });
