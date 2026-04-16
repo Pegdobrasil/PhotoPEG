@@ -117,13 +117,13 @@ def normalize_output_options(
     output_format = (output_format or "jpg").lower().strip()
     background_mode = (background_mode or "white").lower().strip()
 
-    if output_format not in {"jpg", "jpeg", "png"}:
+    if output_format not in {"jpg", "png"}:
         output_format = "jpg"
 
     if background_mode not in {"white", "transparent"}:
         background_mode = "white"
 
-    if output_format in {"jpg", "jpeg"}:
+    if output_format == "jpg":
         background_mode = "white"
 
     output_width = max(100, min(5000, int(output_width)))
@@ -186,8 +186,6 @@ def compose_output_image(
     canvas.convert("RGB").save(output, format="JPEG", quality=jpeg_quality, optimize=True)
     output.seek(0)
 
-    if output_format == "jpeg":
-        return output.read(), "jpeg", "image/jpeg"
     return output.read(), "jpg", "image/jpeg"
 
 
@@ -207,7 +205,7 @@ def load_batch_meta(batch_dir: Path) -> dict:
 
 def save_batch_meta(batch_dir: Path, meta: dict) -> None:
     meta_path = batch_dir / "batch.json"
-    meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+    meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8"))
 
 
 def image_bytes_to_pil(raw: bytes) -> Image.Image:
@@ -380,7 +378,10 @@ async def save_edited(batch_id: str, image_id: str, payload: SaveEditedPayload):
             + list(item_dir.glob("*.png"))
         )
 
-        final_candidates = [f for f in existing_files if "_isolated" not in f.name and "_mask" not in f.name and "_original" not in f.name]
+        final_candidates = [
+            f for f in existing_files
+            if "_isolated" not in f.name and "_mask" not in f.name and "_original" not in f.name
+        ]
         if not final_candidates:
             raise HTTPException(status_code=404, detail="Arquivo final não encontrado.")
 
