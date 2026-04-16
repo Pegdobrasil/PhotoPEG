@@ -205,7 +205,10 @@ def load_batch_meta(batch_dir: Path) -> dict:
 
 def save_batch_meta(batch_dir: Path, meta: dict) -> None:
     meta_path = batch_dir / "batch.json"
-    meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8"))
+    meta_path.write_text(
+        json.dumps(meta, ensure_ascii=False, indent=2),
+        encoding="utf-8"
+    )
 
 
 def image_bytes_to_pil(raw: bytes) -> Image.Image:
