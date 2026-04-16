@@ -136,7 +136,7 @@ function fileBaseFromDisplayName(name) {
 }
 
 function syncFormatAndBackground(formatEl, backgroundEl) {
-  if (formatEl.value === "jpg" || formatEl.value === "jpeg") {
+  if (formatEl.value === "jpg") {
     backgroundEl.value = "white";
     backgroundEl.disabled = true;
   } else {
@@ -433,7 +433,7 @@ function applyViewZoom() {
 
 function getEditorOutputSettings() {
   const format = editorOutputFormat.value;
-  const background = (format === "jpg" || format === "jpeg") ? "white" : editorBackgroundMode.value;
+  const background = format === "jpg" ? "white" : editorBackgroundMode.value;
   const width = normalizeDimension(editorOutputWidth.value, 1000);
   const height = normalizeDimension(editorOutputHeight.value, 1000);
   return { format, background, width, height };
@@ -1096,7 +1096,7 @@ function getBatchOutputSettings() {
   return {
     format: outputFormat.value,
     background:
-      outputFormat.value === "jpg" || outputFormat.value === "jpeg"
+      outputFormat.value === "jpg"
         ? "white"
         : backgroundMode.value,
     width: normalizeDimension(outputWidth.value, 1000),
@@ -1117,13 +1117,13 @@ outputFormat.addEventListener("change", () => handleFormatChange(outputFormat, b
 editorOutputFormat.addEventListener("change", () => handleFormatChange(editorOutputFormat, editorBackgroundMode));
 
 backgroundMode.addEventListener("change", () => {
-  if (outputFormat.value === "jpg" || outputFormat.value === "jpeg") {
+  if (outputFormat.value === "jpg") {
     backgroundMode.value = "white";
   }
 });
 
 editorBackgroundMode.addEventListener("change", () => {
-  if (editorOutputFormat.value === "jpg" || editorOutputFormat.value === "jpeg") {
+  if (editorOutputFormat.value === "jpg") {
     editorBackgroundMode.value = "white";
   }
   setTransparencyPreview(editorBackgroundMode.value === "transparent");
